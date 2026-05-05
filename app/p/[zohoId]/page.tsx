@@ -50,8 +50,8 @@ export default async function DashboardPage({
           target={tesla.target}
           label={`Tesla ${tesla.target}`}
           bgImage="/Tesla2.jpeg"
-          bgPosition="center center"
-          bgSize="cover"
+          bgPosition="center top"
+          bgSize="contain"
           progressIcon="🚗"
         />
 
@@ -62,8 +62,8 @@ export default async function DashboardPage({
           label={`${cruise.target} pts`}
           sublabel={cruiseSublabel}
           bgImage="/Crucero2.jpeg"
-          bgPosition="center center"
-          bgSize="cover"
+          bgPosition="center top"
+          bgSize="contain"
           unit="pts"
           progressIcon="🚢"
         />
@@ -74,7 +74,8 @@ export default async function DashboardPage({
           target={monthly.target}
           label={String(monthly.target)}
           bgImage="/Solar.jpeg"
-          bgPosition="center center"
+          bgPosition="center top"
+          bgSize="contain"
           progressIcon="☀️"
         />
       </section>
