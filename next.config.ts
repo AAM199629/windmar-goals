@@ -1,7 +1,8 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  // Allow the dashboard page to be rendered fresh on every request
+  // (metrics come from KV which updates via sync)
+}
 
-export default nextConfig;
+export default nextConfig
