@@ -3,8 +3,18 @@ export const TESLA_TARGET = 250
 export const CRUISE_TARGET = 70
 export const CRUISE_PERSONAL_TARGET = 50
 
-export const TESLA_START = process.env.TESLA_START_DATE ?? '2025-11-01'
-export const TESLA_END   = process.env.TESLA_END_DATE   ?? '2026-04-30'
+function currentTeslaPeriod() {
+  const now   = new Date()
+  const year  = now.getFullYear()
+  const month = now.getMonth() + 1 // 1–12
+  return month <= 6
+    ? { start: `${year}-01-01`, end: `${year}-06-30` }
+    : { start: `${year}-07-01`, end: `${year}-12-31` }
+}
+
+const _tesla = currentTeslaPeriod()
+export const TESLA_START = process.env.TESLA_START_DATE ?? _tesla.start
+export const TESLA_END   = process.env.TESLA_END_DATE   ?? _tesla.end
 export const CRUISE_START = process.env.CRUISE_START_DATE ?? '2025-11-01'
 export const CRUISE_END   = process.env.CRUISE_END_DATE   ?? '2026-12-31'
 
