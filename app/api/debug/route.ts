@@ -88,6 +88,25 @@ export async function GET(req: Request) {
     [first, last, member.email],
   )
 
+  // 6. Search for product-related columns across all schemas
+  const productColumns = await query<{ table_schema: string; table_name: string; column_name: string }>(
+    `SELECT table_schema, table_name, column_name
+     FROM information_schema.columns
+     WHERE LOWER(column_name) LIKE '%product%'
+     ORDER BY table_schema, table_name, column_name
+     LIMIT 50`,
+    [],
+  )
+
+  // 7. Peek at fact_deals columns
+  const factDealsColumns = await query<{ column_name: string; data_type: string }>(
+    `SELECT column_name, data_type
+     FROM information_schema.columns
+     WHERE table_schema = 'dwh' AND table_name = 'fact_deals'
+     ORDER BY ordinal_position`,
+    [],
+  )
+
   return NextResponse.json({
     member,
     teslaRange: { start: TESLA_START, end: TESLA_END },
@@ -97,5 +116,7 @@ export async function GET(req: Request) {
     pipelinesViaJoin: viaJoin,
     monthlyRange: { first, last },
     monthlyByStage: monthlyDirect,
+    productColumnsAcrossAllSchemas: productColumns,
+    factDealsColumns,
   })
 }
