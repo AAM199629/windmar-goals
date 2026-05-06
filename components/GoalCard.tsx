@@ -11,12 +11,14 @@ interface GoalCardProps {
   bgImage?:       string
   bgPosition?:    string
   bgSize?:        string
+  gradient?:      string
+  compact?:       boolean
   unit?:          string
   progressIcon?:  string
   rules?:         string
 }
 
-const MONTHLY_GRADIENT =
+const DEFAULT_GRADIENT =
   'linear-gradient(155deg, #0D1654 0%, #1565C0 45%, #E88B0C 100%)'
 
 export default function GoalCard({
@@ -28,6 +30,8 @@ export default function GoalCard({
   bgImage,
   bgPosition = 'center center',
   bgSize = 'cover',
+  gradient,
+  compact = false,
   unit = '',
   progressIcon,
   rules,
@@ -46,10 +50,10 @@ export default function GoalCard({
         backgroundRepeat: 'no-repeat',
         backgroundColor: '#0D1654',
       }
-    : { background: MONTHLY_GRADIENT }
+    : { background: gradient ?? DEFAULT_GRADIENT }
 
   return (
-    <div className="goal-card" style={bgStyle}>
+    <div className={`goal-card${compact ? ' goal-card--compact' : ''}`} style={bgStyle}>
       <div className="goal-card-overlay" />
 
       {/* Title badge + optional info button */}

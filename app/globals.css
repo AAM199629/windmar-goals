@@ -155,6 +155,13 @@
   flex-shrink: 0;
 }
 
+.goal-card--compact {
+  min-height: 260px;
+}
+.goal-card--compact .goal-number {
+  font-size: 3.2rem;
+}
+
 .goal-card-overlay {
   position: absolute;
   inset: 0;
