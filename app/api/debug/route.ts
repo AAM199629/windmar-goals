@@ -88,35 +88,42 @@ export async function GET(req: Request) {
     [first, last, member.email],
   )
 
-  // 6. Search for product-related columns across all schemas
-  const productColumns = await query<{ table_schema: string; table_name: string; column_name: string }>(
+  // 6. Tables that reference id_product_sale (find bridge tables)
+  const tablesWithProductSale = await query<{ table_schema: string; table_name: string; column_name: string }>(
     `SELECT table_schema, table_name, column_name
      FROM information_schema.columns
-     WHERE LOWER(column_name) LIKE '%product%'
-     ORDER BY table_schema, table_name, column_name
-     LIMIT 50`,
+     WHERE LOWER(column_name) = 'id_product_sale'
+     ORDER BY table_schema, table_name`,
     [],
   )
 
-  // 7. Peek at fact_deals columns
-  const factDealsColumns = await query<{ column_name: string; data_type: string }>(
+  // 7. Sample rows from dim_product_sale
+  const productSaleSample = await query<Record<string, unknown>>(
+    `SELECT * FROM dwh.dim_product_sale LIMIT 20`,
+    [],
+  )
+
+  // 8. All dwh tables (to spot bridge tables)
+  const dwhTables = await query<{ table_name: string }>(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'dwh' ORDER BY table_name`,
+    [],
+  )
+
+  // 9. dim_profiles columns
+  const dimProfilesCols = await query<{ column_name: string; data_type: string }>(
     `SELECT column_name, data_type
      FROM information_schema.columns
-     WHERE table_schema = 'dwh' AND table_name = 'fact_deals'
+     WHERE table_schema = 'dwh' AND table_name = 'dim_profiles'
      ORDER BY ordinal_position`,
     [],
   )
 
   return NextResponse.json({
     member,
-    teslaRange: { start: TESLA_START, end: TESLA_END },
-    cruiseRange: { start: CRUISE_START, end: CRUISE_END },
-    pipelinesViaEmailDirect: pipelinesTesl,
-    allStagesViaEmail: allStages,
-    pipelinesViaJoin: viaJoin,
-    monthlyRange: { first, last },
-    monthlyByStage: monthlyDirect,
-    productColumnsAcrossAllSchemas: productColumns,
-    factDealsColumns,
+    tablesWithProductSale,
+    productSaleSample,
+    dwhTables,
+    dimProfilesCols,
   })
 }
