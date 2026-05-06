@@ -7,6 +7,12 @@ import {
   CRUISE_PERSONAL_TARGET,
   ASISTIDA_POINTS,
   monthlyTarget,
+  normalizeRole,
+  plinkoTarget,
+  ruletaTarget,
+  GRAD_POINTS,
+  GRAD_TARGET,
+  PREMIO_PIPELINES,
 } from './config'
 
 // ── Types from Redshift ────────────────────────────────────────────────────────
@@ -16,6 +22,7 @@ export interface RepMember {
   full_name:            string
   email:                string
   status:               string | null
+  sales_role:           string | null
   upline_level_1:       string | null
   upline_level_2:       string | null
   upline_level_3:       string | null
@@ -28,7 +35,7 @@ export interface RepMember {
 // Map of pipeline → count for one member
 export type PipelineCounts = Record<string, number>
 
-// ── Output type ────────────────────────────────────────────────────────────────
+// ── Output types ───────────────────────────────────────────────────────────────
 
 export interface CruiseBreakdown {
   solar:     number
@@ -39,6 +46,28 @@ export interface CruiseBreakdown {
   consultor: number
   lider:     number
   gerente:   number
+}
+
+export interface PlinkoMetrics {
+  current:   number
+  target:    number
+  role:      string
+  weekStart: string
+}
+
+export interface RuletaMetrics {
+  current: number
+  target:  number
+  role:    string
+  month:   string
+}
+
+export interface GraduacionMetrics {
+  current:   number
+  target:    number
+  role:      string
+  breakdown: Record<string, number>
+  month:     string
 }
 
 export interface GoalsMetrics {
@@ -63,7 +92,10 @@ export interface GoalsMetrics {
     target:  number
     month:   string
   }
-  updatedAt: string
+  plinko:     PlinkoMetrics
+  ruleta:     RuletaMetrics | null
+  graduacion: GraduacionMetrics
+  updatedAt:  string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -103,26 +135,34 @@ function calcGraduationPts(
 // ── Main builder ───────────────────────────────────────────────────────────────
 
 export function buildMetrics(params: {
-  member:        RepMember
-  teslaCounts:   PipelineCounts
-  teamCounts:    PipelineCounts
-  cruiseCounts:  PipelineCounts
-  teamMembers:   RepMember[]
-  // Count of trainee (1st–4th) sales assisted by this member as mentor
-  asistidaCount: number
-  monthlyCount:  number
-  currentMonth:  string
-  cruiseStart:   string
-  cruiseEnd:     string
+  member:           RepMember
+  teslaCounts:      PipelineCounts
+  teamCounts:       PipelineCounts
+  cruiseCounts:     PipelineCounts
+  teamMembers:      RepMember[]
+  asistidaCount:    number
+  monthlyCount:     number
+  weeklyPipelines:  PipelineCounts
+  monthlyPipelines: PipelineCounts
+  currentMonth:     string
+  weekStart:        string
+  cruiseStart:      string
+  cruiseEnd:        string
 }): GoalsMetrics {
-  const { member, teslaCounts, teamCounts, cruiseCounts, teamMembers,
-    asistidaCount, monthlyCount, currentMonth, cruiseStart, cruiseEnd } = params
+  const {
+    member, teslaCounts, teamCounts, cruiseCounts, teamMembers,
+    asistidaCount, monthlyCount, weeklyPipelines, monthlyPipelines,
+    currentMonth, weekStart, cruiseStart, cruiseEnd,
+  } = params
+
+  const role = normalizeRole(member.sales_role)
+  const mm   = Number(currentMonth.slice(5, 7))
 
   // ── Tesla ──────────────────────────────────────────────────────────────────
   const teslaPersonal = sumPipelinesFor(teslaCounts, TESLA_PIPELINES)
   const teslaTeam     = sumPipelinesFor(teamCounts,  TESLA_PIPELINES)
 
-  // ── Cruise personal points ──────────────────────────────────────────────────
+  // ── Cruise ─────────────────────────────────────────────────────────────────
   const cruisePtsPersonal = calcCruisePts(cruiseCounts)
 
   const cruiseBreakdown: CruiseBreakdown = {
@@ -136,7 +176,6 @@ export function buildMetrics(params: {
     gerente:   0,
   }
 
-  // ── Cruise graduation points from team members ──────────────────────────────
   for (const tm of teamMembers) {
     const grad = calcGraduationPts(tm, cruiseStart, cruiseEnd)
     cruiseBreakdown.consultor += grad.consultor
@@ -149,6 +188,39 @@ export function buildMetrics(params: {
     + cruiseBreakdown.consultor
     + cruiseBreakdown.lider
     + cruiseBreakdown.gerente
+
+  // ── Plinko ─────────────────────────────────────────────────────────────────
+  const plinko: PlinkoMetrics = {
+    current:   sumPipelinesFor(weeklyPipelines, PREMIO_PIPELINES),
+    target:    plinkoTarget(member.sales_role, mm),
+    role,
+    weekStart,
+  }
+
+  // ── Ruleta ─────────────────────────────────────────────────────────────────
+  const ruletaCurrent = sumPipelinesFor(monthlyPipelines, PREMIO_PIPELINES)
+  const ruletaTgt     = ruletaTarget(member.sales_role, mm)
+  const ruleta: RuletaMetrics | null = ruletaTgt !== null
+    ? { current: ruletaCurrent, target: ruletaTgt, role, month: currentMonth }
+    : null
+
+  // ── Graduación ─────────────────────────────────────────────────────────────
+  const gradPts = GRAD_POINTS[role] ?? GRAD_POINTS.trainee
+  const gradBreakdown: Record<string, number> = {}
+  let gradTotal = 0
+  for (const [pipeline, pts] of Object.entries(gradPts)) {
+    const earned = (monthlyPipelines[pipeline] ?? 0) * pts
+    gradBreakdown[pipeline] = earned
+    gradTotal += earned
+  }
+
+  const graduacion: GraduacionMetrics = {
+    current:   gradTotal,
+    target:    GRAD_TARGET[role] ?? 20,
+    role,
+    breakdown: gradBreakdown,
+    month:     currentMonth,
+  }
 
   return {
     zohoId: member.member_id,
@@ -172,6 +244,9 @@ export function buildMetrics(params: {
       target:  monthlyTarget(currentMonth),
       month:   currentMonth,
     },
+    plinko,
+    ruleta,
+    graduacion,
     updatedAt: new Date().toISOString(),
   }
 }

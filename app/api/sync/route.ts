@@ -15,6 +15,19 @@ function monthRange(yyyymm: string): { first: string; last: string } {
   return { first: `${year}-${mm}-01`, last: `${year}-${mm}-${lastDay}` }
 }
 
+function currentWeekRange(): { monday: string; sunday: string } {
+  const now  = new Date()
+  const day  = now.getDay() // 0=Sun … 6=Sat
+  const diff = day === 0 ? -6 : 1 - day
+  const mon  = new Date(now)
+  mon.setDate(now.getDate() + diff)
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { monday: fmt(mon), sunday: fmt(sun) }
+}
+
 // Rows returned by the pipeline-count queries
 interface PipelineRow {
   member_id: string
@@ -53,13 +66,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const month        = url.searchParams.get('month') ?? currentYYYYMM()
+    const month           = url.searchParams.get('month') ?? currentYYYYMM()
     const { first, last } = monthRange(month)
+    const { monday, sunday } = currentWeekRange()
 
     // ── 1. All active team members with hierarchy + graduation dates ───────────
     const members = await query<RepMember>(`
       SELECT
-        member_id, full_name, email, status,
+        member_id, full_name, email, status, sales_role,
         upline_level_1, upline_level_2, upline_level_3, upline_level_4,
         consultor_start_date, lider_start_date, gerente_start_date
       FROM dw_zoho.dim_sales_team_member
@@ -93,7 +107,6 @@ export async function POST(req: Request) {
     `, [TESLA_START, TESLA_END])
 
     // ── 3. Team deal counts by pipeline for Tesla period (all uplines at once) ─
-    // Finds every deal where the owner's upline chain includes a given member
     const teamTeslaRows = await query<PipelineRow & { upline_id: string }>(`
       SELECT team_map.upline_id AS member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
       FROM dwh.fact_deals fd
@@ -143,7 +156,6 @@ export async function POST(req: Request) {
     `, [CRUISE_START, CRUISE_END])
 
     // ── 5. Asistida: count trainee (1st–4th) sales per mentor within Cruise period ─
-    // The mentor is the trainee's upline_level_1
     const asistidaRows = await query<AsistidaRow>(`
       SELECT stm_mentor.member_id AS mentor_id, COUNT(*) AS cnt
       FROM dwh.fact_deals fd
@@ -164,7 +176,7 @@ export async function POST(req: Request) {
       GROUP BY stm_mentor.member_id
     `, [CRUISE_START, CRUISE_END])
 
-    // ── 6. Monthly count per rep (current month, any pipeline, not cancelled) ─
+    // ── 6. Monthly total count per rep (for Monthly Sales card) ───────────────
     const monthlyRows = await query<MonthlyRow>(`
       SELECT stm.member_id, COUNT(*) AS monthly_cnt
       FROM dwh.fact_deals fd
@@ -182,10 +194,52 @@ export async function POST(req: Request) {
       GROUP BY stm.member_id
     `, [first, last])
 
-    // ── 7. Build lookup maps ───────────────────────────────────────────────────
-    const teslaPipelineMap  = toPipelineMap(personalTeslaRows)
-    const teamPipelineMap   = toPipelineMap(teamTeslaRows)
-    const cruisePipelineMap = toPipelineMap(personalCruiseRows)
+    // ── 7. Weekly pipeline counts (Plinko) ────────────────────────────────────
+    const weeklyPipelineRows = await query<PipelineRow>(`
+      SELECT stm.member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_profiles dp
+        ON dp.id_profile = fd.id_profile
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm
+        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND dsr.stage <> 'Cancelled'
+        AND stm.member_id IS NOT NULL
+      GROUP BY stm.member_id, LOWER(dp.pipeline)
+    `, [monday, sunday])
+
+    // ── 8. Monthly pipeline counts (Ruleta + Graduación) ─────────────────────
+    const monthlyPipelineRows = await query<PipelineRow>(`
+      SELECT stm.member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_profiles dp
+        ON dp.id_profile = fd.id_profile
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm
+        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND dsr.stage <> 'Cancelled'
+        AND stm.member_id IS NOT NULL
+      GROUP BY stm.member_id, LOWER(dp.pipeline)
+    `, [first, last])
+
+    // ── 9. Build lookup maps ──────────────────────────────────────────────────
+    const teslaPipelineMap    = toPipelineMap(personalTeslaRows)
+    const teamPipelineMap     = toPipelineMap(teamTeslaRows)
+    const cruisePipelineMap   = toPipelineMap(personalCruiseRows)
+    const weeklyPipelineMap   = toPipelineMap(weeklyPipelineRows)
+    const monthlyPipelineMap  = toPipelineMap(monthlyPipelineRows)
 
     const monthlyMap: Record<string, number> = {}
     for (const r of monthlyRows) {
@@ -207,7 +261,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── 8. Build and persist metrics for each member ──────────────────────────
+    // ── 10. Build and persist metrics for each member ─────────────────────────
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
 
     await Promise.all(
@@ -215,15 +269,18 @@ export async function POST(req: Request) {
         try {
           const metrics = buildMetrics({
             member,
-            teslaCounts:   teslaPipelineMap[member.member_id]  ?? {},
-            teamCounts:    teamPipelineMap[member.member_id]   ?? {},
-            cruiseCounts:  cruisePipelineMap[member.member_id] ?? {},
-            teamMembers:   teamMembersOf[member.member_id]     ?? [],
-            asistidaCount: asistidaMap[member.member_id]       ?? 0,
-            monthlyCount:  monthlyMap[member.member_id]        ?? 0,
-            currentMonth:  month,
-            cruiseStart:   CRUISE_START,
-            cruiseEnd:     CRUISE_END,
+            teslaCounts:      teslaPipelineMap[member.member_id]   ?? {},
+            teamCounts:       teamPipelineMap[member.member_id]    ?? {},
+            cruiseCounts:     cruisePipelineMap[member.member_id]  ?? {},
+            teamMembers:      teamMembersOf[member.member_id]      ?? [],
+            asistidaCount:    asistidaMap[member.member_id]        ?? 0,
+            monthlyCount:     monthlyMap[member.member_id]         ?? 0,
+            weeklyPipelines:  weeklyPipelineMap[member.member_id]  ?? {},
+            monthlyPipelines: monthlyPipelineMap[member.member_id] ?? {},
+            currentMonth:     month,
+            weekStart:        monday,
+            cruiseStart:      CRUISE_START,
+            cruiseEnd:        CRUISE_END,
           })
 
           await setMetrics(member.member_id, metrics)
@@ -240,6 +297,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       month,
+      weekRange: { monday, sunday },
       total: members.length,
       succeeded,
       failed,

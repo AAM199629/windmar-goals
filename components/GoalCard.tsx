@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+
 interface GoalCardProps {
   title:          string
   current:        number
@@ -11,6 +13,7 @@ interface GoalCardProps {
   bgSize?:        string
   unit?:          string
   progressIcon?:  string
+  rules?:         string
 }
 
 const MONTHLY_GRADIENT =
@@ -27,7 +30,10 @@ export default function GoalCard({
   bgSize = 'cover',
   unit = '',
   progressIcon,
+  rules,
 }: GoalCardProps) {
+  const [showRules, setShowRules] = useState(false)
+
   const pct     = Math.min(current / target, 1)
   const display = unit ? `${current.toFixed(1)} ${unit}` : String(current)
   const iconPct = Math.max(Math.min(pct * 100, 95), 4)
@@ -46,10 +52,30 @@ export default function GoalCard({
     <div className="goal-card" style={bgStyle}>
       <div className="goal-card-overlay" />
 
-      {/* Title badge */}
+      {/* Title badge + optional info button */}
       <div className="goal-title-badge">
         <span>{title}</span>
+        {rules && (
+          <button
+            className="goal-info-btn"
+            onClick={() => setShowRules(true)}
+            aria-label="Ver reglas"
+          >ℹ</button>
+        )}
       </div>
+
+      {/* Rules overlay */}
+      {showRules && rules && (
+        <div className="goal-rules-overlay">
+          <div className="goal-rules-panel">
+            <h4>📋 REGLAS</h4>
+            <pre>{rules}</pre>
+            <button className="goal-rules-close" onClick={() => setShowRules(false)}>
+              ✕ Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sub-label (e.g. graduation pts) */}
       {sublabel && (
@@ -76,7 +102,7 @@ export default function GoalCard({
 
       {/* Bottom label */}
       <div className="goal-bottom">
-        <span className="goal-bottom-label">TOTAL SALES:</span>
+        <span className="goal-bottom-label">META:</span>
         <span className="goal-bottom-value">{label}</span>
       </div>
     </div>

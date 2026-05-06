@@ -191,7 +191,79 @@
   border-radius: 999px;
   white-space: nowrap;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.goal-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.goal-info-btn:hover { background: var(--blue); }
+
+/* Rules overlay — sits above card content */
+.goal-rules-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13,22,84,0.95);
+  z-index: 10;
+  border-radius: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.goal-rules-panel { width: 100%; }
+
+.goal-rules-panel h4 {
+  font-family: var(--font-cond);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 0.75rem;
+}
+
+.goal-rules-panel pre {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.9);
+  white-space: pre-wrap;
+  line-height: 1.65;
+  margin-bottom: 1.25rem;
+}
+
+.goal-rules-close {
+  display: block;
+  margin: 0 auto;
+  background: var(--orange);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 1.5rem;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.goal-rules-close:hover { background: var(--gold); }
 
 .goal-sublabel {
   font-family: var(--font-cond);

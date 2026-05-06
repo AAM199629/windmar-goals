@@ -1,5 +1,52 @@
 import GoalCard from '@/components/GoalCard'
 import { getMetrics } from '@/lib/kv'
+import { GRAD_POINTS } from '@/lib/config'
+
+// ── Rules text generators (server-side, role-aware) ───────────────────────────
+
+function plinkoRules(role: string, target: number, weekStart: string): string {
+  const season = (() => {
+    const mm = new Date().getMonth() + 1
+    return mm >= 4 && mm <= 9 ? 'Abr–Sep (temporada alta)' : 'Oct–Mar (temporada baja)'
+  })()
+  return `META SEMANAL (lunes–domingo)
+Semana desde: ${weekStart}
+Temporada: ${season}
+
+Productos elegibles:
+  • Solar (con o sin batería)
+  • Roofing
+
+Tu meta (${role}): ${target} ventas`
+}
+
+function ruletaRules(role: string, target: number): string {
+  const season = (() => {
+    const mm = new Date().getMonth() + 1
+    return mm >= 4 && mm <= 9 ? 'Abr–Sep (temporada alta)' : 'Oct–Mar (temporada baja)'
+  })()
+  return `META MENSUAL
+Temporada: ${season}
+
+Productos elegibles:
+  • Solar (con o sin batería)
+  • Roofing
+
+Tu meta (${role}): ${target} ventas`
+}
+
+function graduacionRules(role: string, target: number): string {
+  const pts = GRAD_POINTS[role] ?? GRAD_POINTS.trainee
+  return `META MENSUAL: ${target} puntos
+
+Puntos por venta (${role}):
+  • Solar/Batería: ${pts['residential solar']} pt
+  • Roofing: ${pts['roofing']} pt
+  • PPS/Anchor: ${pts['pps']} pt
+  • Agua: ${pts['water products']} pt`
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage({
   params,
@@ -21,7 +68,7 @@ export default async function DashboardPage({
     )
   }
 
-  const { tesla, cruise, monthly } = metrics
+  const { tesla, cruise, monthly, plinko, ruleta, graduacion } = metrics
 
   const cruiseSublabel = (
     cruise.breakdown.consultor + cruise.breakdown.lider + cruise.breakdown.gerente
@@ -41,7 +88,7 @@ export default async function DashboardPage({
         </div>
       </header>
 
-      {/* Cards grid */}
+      {/* Cards grid — main goals */}
       <div className="section-eyebrow">01 — Progreso de Metas</div>
       <section className="cards-grid">
         <GoalCard
@@ -113,6 +160,96 @@ export default async function DashboardPage({
           <dl>
             <dt>Mes</dt><dd>{monthly.month}</dd>
             <dt>Ventas</dt><dd className="highlight">{monthly.current} / {monthly.target}</dd>
+          </dl>
+        </div>
+      </section>
+
+      {/* Premiaciones */}
+      <div className="section-eyebrow">03 — Premiaciones</div>
+      <section className="cards-grid">
+        <GoalCard
+          title="PLINKO"
+          current={plinko.current}
+          target={plinko.target}
+          label={`Meta: ${plinko.target} ventas`}
+          sublabel={`Semana del ${plinko.weekStart}`}
+          bgImage="/Plinko.jpeg"
+          bgPosition="center center"
+          bgSize="cover"
+          progressIcon="🎯"
+          rules={plinkoRules(plinko.role, plinko.target, plinko.weekStart)}
+        />
+
+        {ruleta && (
+          <GoalCard
+            title="RULETA WINDMAR"
+            current={ruleta.current}
+            target={ruleta.target}
+            label={`Meta: ${ruleta.target} ventas`}
+            sublabel={ruleta.month}
+            bgImage="/Ruleta.jpeg"
+            bgPosition="center center"
+            bgSize="cover"
+            progressIcon="🎡"
+            rules={ruletaRules(ruleta.role, ruleta.target)}
+          />
+        )}
+
+        <GoalCard
+          title={`GRADUACIÓN`}
+          current={Number(graduacion.current.toFixed(1))}
+          target={graduacion.target}
+          label={`${graduacion.target} pts`}
+          sublabel={`${graduacion.role.charAt(0).toUpperCase() + graduacion.role.slice(1)} — ${graduacion.month}`}
+          bgImage="/Graduacion.jpeg"
+          bgPosition="center center"
+          bgSize="cover"
+          unit="pts"
+          progressIcon="🎓"
+          rules={graduacionRules(graduacion.role, graduacion.target)}
+        />
+      </section>
+
+      {/* Graduation detail */}
+      <div className="section-eyebrow">04 — Desglose Premiaciones</div>
+      <section className="detail-section">
+        <div className="detail-card">
+          <h3>Plinko — Semana</h3>
+          <dl>
+            <dt>Solar</dt>
+            <dd>{(plinko as any).weeklyPipelines?.['residential solar'] ?? '—'}</dd>
+            <dt>Roofing</dt>
+            <dd>{(plinko as any).weeklyPipelines?.['roofing'] ?? '—'}</dd>
+            <dt>Semana</dt><dd>{plinko.weekStart}</dd>
+            <dt>Total elegibles</dt>
+            <dd className="highlight">{plinko.current} / {plinko.target}</dd>
+          </dl>
+        </div>
+
+        {ruleta && (
+          <div className="detail-card">
+            <h3>Ruleta — Mes</h3>
+            <dl>
+              <dt>Mes</dt><dd>{ruleta.month}</dd>
+              <dt>Total elegibles</dt>
+              <dd className="highlight">{ruleta.current} / {ruleta.target}</dd>
+            </dl>
+          </div>
+        )}
+
+        <div className="detail-card">
+          <h3>Graduación — {graduacion.role}</h3>
+          <dl>
+            <dt>Solar</dt>
+            <dd>{((graduacion.breakdown['residential solar'] ?? 0) + (graduacion.breakdown['commercial solar'] ?? 0)).toFixed(1)} pts</dd>
+            <dt>Roofing</dt>
+            <dd>{(graduacion.breakdown['roofing'] ?? 0).toFixed(1)} pts</dd>
+            <dt>PPS/Anchor</dt>
+            <dd>{(graduacion.breakdown['pps'] ?? 0).toFixed(1)} pts</dd>
+            <dt>Agua</dt>
+            <dd>{(graduacion.breakdown['water products'] ?? 0).toFixed(1)} pts</dd>
+            <dt>Total</dt>
+            <dd className="highlight">{graduacion.current.toFixed(1)} / {graduacion.target}</dd>
           </dl>
         </div>
       </section>

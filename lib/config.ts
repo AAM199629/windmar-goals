@@ -23,7 +23,6 @@ export const CRUISE_END   = process.env.CRUISE_END_DATE   ?? '2026-12-31'
 export const TESLA_PIPELINES = ['residential solar', 'commercial solar', 'roofing']
 
 // Cruise points by pipeline value
-// "pps" = Anchor/Power Protection System product (confirmed)
 export const CRUISE_POINTS: Record<string, number> = {
   'residential solar': 1,
   'commercial solar':  1,
@@ -32,10 +31,8 @@ export const CRUISE_POINTS: Record<string, number> = {
   'pps':               0.5,
 }
 
-// Points per assisted trainee sale (1st–4th sale, tracked via dim_staff.trainee_sales)
 export const ASISTIDA_POINTS = 0.5
 
-// Points to the mentor when a team member graduates (Cruise)
 export const GRADUATION_POINTS: Record<'consultor' | 'lider' | 'gerente', number> = {
   consultor: 1,
   lider:     5,
@@ -46,4 +43,48 @@ export const GRADUATION_POINTS: Record<'consultor' | 'lider' | 'gerente', number
 export function monthlyTarget(yyyymm: string): number {
   const mm = Number(yyyymm.slice(5, 7))
   return mm >= 4 && mm <= 9 ? 5 : 3
+}
+
+// ── Premios: Plinko, Ruleta, Graduación ───────────────────────────────────────
+
+export function normalizeRole(role: string | null | undefined): 'trainee' | 'consultor' | 'lider' | 'gerente' {
+  const r = (role ?? '').toLowerCase().replace('empleado-', '').replace('empleado - ', '').trim()
+  if (r.includes('gerente'))               return 'gerente'
+  if (r.includes('líder') || r.includes('lider')) return 'lider'
+  if (r.includes('consultor'))             return 'consultor'
+  return 'trainee'
+}
+
+// Pipelines that qualify for Plinko and Ruleta prizes
+export const PREMIO_PIPELINES = ['residential solar', 'commercial solar', 'roofing']
+
+// Plinko: weekly qualifying sales target by role and season
+export function plinkoTarget(role: string | null | undefined, month: number): number {
+  const r  = normalizeRole(role)
+  const hi = month >= 4 && month <= 9
+  if (r === 'trainee')   return 2
+  if (r === 'consultor') return hi ? 3 : 2
+  return hi ? 4 : 3  // lider / gerente
+}
+
+// Ruleta: monthly qualifying sales target (null = trainee, not eligible)
+export function ruletaTarget(role: string | null | undefined, month: number): number | null {
+  const r  = normalizeRole(role)
+  if (r === 'trainee') return null
+  const hi = month >= 4 && month <= 9
+  if (r === 'consultor') return hi ? 6 : 4
+  if (r === 'lider')     return hi ? 8 : 6
+  return hi ? 10 : 8  // gerente
+}
+
+// Graduation points per pipeline per normalized role
+export const GRAD_POINTS: Record<string, Record<string, number>> = {
+  trainee:   { 'residential solar': 1, 'commercial solar': 1, 'roofing': 1, 'pps': 0.5, 'water products': 0.5 },
+  consultor: { 'residential solar': 1, 'commercial solar': 1, 'roofing': 1, 'pps': 0.5, 'water products': 0.5 },
+  lider:     { 'residential solar': 1, 'commercial solar': 1, 'roofing': 0.5, 'pps': 0.5, 'water products': 0.5 },
+  gerente:   { 'residential solar': 1, 'commercial solar': 1, 'roofing': 0.5, 'pps': 0.5, 'water products': 0.5 },
+}
+
+export const GRAD_TARGET: Record<string, number> = {
+  trainee: 20, consultor: 20, lider: 20, gerente: 40,
 }
