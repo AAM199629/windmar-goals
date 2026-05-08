@@ -173,7 +173,9 @@ export default async function DashboardPage({
           target={plinko.target}
           label={`Meta: ${plinko.target} ventas`}
           sublabel={`Semana del ${plinko.weekStart}`}
-          gradient="linear-gradient(155deg, #0D1654 0%, #1565C0 55%, #2196F3 100%)"
+          bgImage="/Plinko.jpeg"
+          bgPosition="center center"
+          bgSize="cover"
           compact
           progressIcon="🎯"
           rules={plinkoRules(plinko.role, plinko.target, plinko.weekStart)}
@@ -186,7 +188,9 @@ export default async function DashboardPage({
             target={ruleta.target}
             label={`Meta: ${ruleta.target} ventas`}
             sublabel={ruleta.month}
-            gradient="linear-gradient(155deg, #7B3A05 0%, #C8640A 55%, #F5A623 100%)"
+            bgImage="/Ruleta.png"
+            bgPosition="center center"
+            bgSize="cover"
             compact
             progressIcon="🎡"
             rules={ruletaRules(ruleta.role, ruleta.target)}
@@ -199,7 +203,9 @@ export default async function DashboardPage({
           target={graduacion.target}
           label={`${graduacion.target} pts`}
           sublabel={`${graduacion.role.charAt(0).toUpperCase() + graduacion.role.slice(1)} — ${graduacion.month}`}
-          gradient="linear-gradient(155deg, #6B7280 0%, #9CA3AF 55%, #D1D5DB 100%)"
+          bgImage="/bierrete.png"
+          bgPosition="center center"
+          bgSize="cover"
           compact
           unit="pts"
           progressIcon="🎓"
