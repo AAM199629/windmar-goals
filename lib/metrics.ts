@@ -15,6 +15,8 @@ import {
   PREMIO_PIPELINES,
 } from './config'
 
+const TEAM_BUILDER_TARGET = 10
+
 // ── Types from Redshift ────────────────────────────────────────────────────────
 
 export interface RepMember {
@@ -70,6 +72,12 @@ export interface GraduacionMetrics {
   month:     string
 }
 
+export interface TeamBuilderMetrics {
+  current:   number
+  target:    number
+  breakdown: { gerentes: number; liders: number }
+}
+
 export interface GoalsMetrics {
   zohoId:  string
   name:    string
@@ -92,10 +100,11 @@ export interface GoalsMetrics {
     target:  number
     month:   string
   }
-  plinko:     PlinkoMetrics
-  ruleta:     RuletaMetrics | null
-  graduacion: GraduacionMetrics
-  updatedAt:  string
+  plinko:      PlinkoMetrics
+  ruleta:      RuletaMetrics | null
+  graduacion:  GraduacionMetrics
+  teamBuilder: TeamBuilderMetrics | null
+  updatedAt:   string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -135,22 +144,23 @@ function calcGraduationPts(
 // ── Main builder ───────────────────────────────────────────────────────────────
 
 export function buildMetrics(params: {
-  member:           RepMember
-  teslaCounts:      PipelineCounts
-  teamCounts:       PipelineCounts
-  cruiseCounts:     PipelineCounts
-  teamMembers:      RepMember[]
-  asistidaCount:    number
-  monthlyCount:     number
-  weeklyPipelines:  PipelineCounts
-  monthlyPipelines: PipelineCounts
-  currentMonth:     string
-  weekStart:        string
-  cruiseStart:      string
-  cruiseEnd:        string
+  member:             RepMember
+  teslaCounts:        PipelineCounts
+  teamCounts:         PipelineCounts
+  cruiseCounts:       PipelineCounts
+  teamMembers:        RepMember[]
+  directLineMembers:  RepMember[]
+  asistidaCount:      number
+  monthlyCount:       number
+  weeklyPipelines:    PipelineCounts
+  monthlyPipelines:   PipelineCounts
+  currentMonth:       string
+  weekStart:          string
+  cruiseStart:        string
+  cruiseEnd:          string
 }): GoalsMetrics {
   const {
-    member, teslaCounts, teamCounts, cruiseCounts, teamMembers,
+    member, teslaCounts, teamCounts, cruiseCounts, teamMembers, directLineMembers,
     asistidaCount, monthlyCount, weeklyPipelines, monthlyPipelines,
     currentMonth, weekStart, cruiseStart, cruiseEnd,
   } = params
@@ -192,7 +202,7 @@ export function buildMetrics(params: {
   // ── Plinko ─────────────────────────────────────────────────────────────────
   const plinko: PlinkoMetrics = {
     current:   sumPipelinesFor(weeklyPipelines, PREMIO_PIPELINES),
-    target:    plinkoTarget(member.sales_role, mm),
+    target:    plinkoTarget(member.sales_role),
     role,
     weekStart,
   }
@@ -222,6 +232,18 @@ export function buildMetrics(params: {
     month:     currentMonth,
   }
 
+  // ── Team Builder (gerentes only) ────────────────────────────────────────────
+  let teamBuilder: TeamBuilderMetrics | null = null
+  if (role === 'gerente') {
+    let tbPts = 0; let gerenteCount = 0; let liderCount = 0
+    for (const dm of directLineMembers) {
+      const dmRole = normalizeRole(dm.sales_role)
+      if (dmRole === 'gerente') { tbPts += 5; gerenteCount++ }
+      else if (dmRole === 'lider') { tbPts += 2; liderCount++ }
+    }
+    teamBuilder = { current: tbPts, target: TEAM_BUILDER_TARGET, breakdown: { gerentes: gerenteCount, liders: liderCount } }
+  }
+
   return {
     zohoId: member.member_id,
     name:   member.full_name,
@@ -247,6 +269,7 @@ export function buildMetrics(params: {
     plinko,
     ruleta,
     graduacion,
+    teamBuilder,
     updatedAt: new Date().toISOString(),
   }
 }

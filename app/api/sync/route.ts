@@ -253,11 +253,16 @@ export async function POST(req: Request) {
 
     // Pre-build: for each member, find their direct/indirect reports
     const teamMembersOf: Record<string, RepMember[]> = {}
+    const directLineMembersOf: Record<string, RepMember[]> = {}
     for (const m of members) {
       for (const uplineId of [m.upline_level_1, m.upline_level_2, m.upline_level_3, m.upline_level_4]) {
         if (!uplineId) continue
         if (!teamMembersOf[uplineId]) teamMembersOf[uplineId] = []
         teamMembersOf[uplineId].push(m)
+      }
+      if (m.upline_level_1) {
+        if (!directLineMembersOf[m.upline_level_1]) directLineMembersOf[m.upline_level_1] = []
+        directLineMembersOf[m.upline_level_1].push(m)
       }
     }
 
@@ -269,18 +274,19 @@ export async function POST(req: Request) {
         try {
           const metrics = buildMetrics({
             member,
-            teslaCounts:      teslaPipelineMap[member.member_id]   ?? {},
-            teamCounts:       teamPipelineMap[member.member_id]    ?? {},
-            cruiseCounts:     cruisePipelineMap[member.member_id]  ?? {},
-            teamMembers:      teamMembersOf[member.member_id]      ?? [],
-            asistidaCount:    asistidaMap[member.member_id]        ?? 0,
-            monthlyCount:     monthlyMap[member.member_id]         ?? 0,
-            weeklyPipelines:  weeklyPipelineMap[member.member_id]  ?? {},
-            monthlyPipelines: monthlyPipelineMap[member.member_id] ?? {},
-            currentMonth:     month,
-            weekStart:        monday,
-            cruiseStart:      CRUISE_START,
-            cruiseEnd:        CRUISE_END,
+            teslaCounts:       teslaPipelineMap[member.member_id]      ?? {},
+            teamCounts:        teamPipelineMap[member.member_id]       ?? {},
+            cruiseCounts:      cruisePipelineMap[member.member_id]     ?? {},
+            teamMembers:       teamMembersOf[member.member_id]         ?? [],
+            directLineMembers: directLineMembersOf[member.member_id]   ?? [],
+            asistidaCount:     asistidaMap[member.member_id]           ?? 0,
+            monthlyCount:      monthlyMap[member.member_id]            ?? 0,
+            weeklyPipelines:   weeklyPipelineMap[member.member_id]     ?? {},
+            monthlyPipelines:  monthlyPipelineMap[member.member_id]    ?? {},
+            currentMonth:      month,
+            weekStart:         monday,
+            cruiseStart:       CRUISE_START,
+            cruiseEnd:         CRUISE_END,
           })
 
           await setMetrics(member.member_id, metrics)

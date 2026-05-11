@@ -58,13 +58,11 @@ export function normalizeRole(role: string | null | undefined): 'trainee' | 'con
 // Pipelines that qualify for Plinko and Ruleta prizes
 export const PREMIO_PIPELINES = ['residential solar', 'commercial solar', 'roofing']
 
-// Plinko: weekly qualifying sales target by role and season
-export function plinkoTarget(role: string | null | undefined, month: number): number {
-  const r  = normalizeRole(role)
-  const hi = month >= 4 && month <= 9
-  if (r === 'trainee')   return 2
-  if (r === 'consultor') return hi ? 3 : 2
-  return hi ? 4 : 3  // lider / gerente
+// Plinko: weekly qualifying sales target by role (Solar + Roofing, year-round)
+export function plinkoTarget(role: string | null | undefined): number {
+  const r = normalizeRole(role)
+  if (r === 'lider' || r === 'gerente') return 3
+  return 2  // trainee / consultor
 }
 
 // Ruleta: monthly qualifying sales target (null = trainee, not eligible)

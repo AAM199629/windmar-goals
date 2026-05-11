@@ -5,34 +5,32 @@ import { GRAD_POINTS } from '@/lib/config'
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
 
 function plinkoRules(role: string, target: number, weekStart: string): string {
-  const season = (() => {
-    const mm = new Date().getMonth() + 1
-    return mm >= 4 && mm <= 9 ? 'Abr–Sep (temporada alta)' : 'Oct–Mar (temporada baja)'
-  })()
   return `META SEMANAL (lunes–domingo)
 Semana desde: ${weekStart}
-Temporada: ${season}
 
 Productos elegibles:
   • Solar (con o sin batería)
   • Roofing
 
-Tu meta (${role}): ${target} ventas`
+Tu meta (${role}): ${target} ventas semanales
+
+⚠️ La lista final y oficial del Plinko se
+enviará en los respectivos chats.`
 }
 
 function ruletaRules(role: string, target: number): string {
-  const season = (() => {
-    const mm = new Date().getMonth() + 1
-    return mm >= 4 && mm <= 9 ? 'Abr–Sep (temporada alta)' : 'Oct–Mar (temporada baja)'
-  })()
   return `META MENSUAL
-Temporada: ${season}
 
 Productos elegibles:
   • Solar (con o sin batería)
   • Roofing
 
-Tu meta (${role}): ${target} ventas`
+Tu meta (${role}): ${target} ventas
+
+⚠️ La lista oficial y final se publicará
+en los respectivos chats.
+Dudas: comunícate con la Office Manager
+o Asistente Administrativa.`
 }
 
 function graduacionRules(role: string, target: number): string {
@@ -68,7 +66,7 @@ export default async function DashboardPage({
     )
   }
 
-  const { tesla, cruise, monthly, plinko, ruleta, graduacion } = metrics
+  const { tesla, cruise, monthly, plinko, ruleta, graduacion, teamBuilder } = metrics
 
   const cruiseSublabel = (
     cruise.breakdown.consultor + cruise.breakdown.lider + cruise.breakdown.gerente
@@ -208,6 +206,30 @@ export default async function DashboardPage({
           progressIcon="🎓"
           rules={graduacionRules(graduacion.role, graduacion.target)}
         />
+
+        {teamBuilder && (
+          <GoalCard
+            title="TEAM BUILDER"
+            current={teamBuilder.current}
+            target={teamBuilder.target}
+            label="10 pts"
+            sublabel={`${teamBuilder.breakdown.gerentes} Ger · ${teamBuilder.breakdown.liders} Líd en línea directa`}
+            gradient="linear-gradient(155deg, #1A237E 0%, #283593 55%, #3949AB 100%)"
+            unit="pts"
+            progressIcon="🏆"
+            rules={`META: 10 pts (línea directa)
+
+Puntos por miembro activo:
+  • Gerente: 5 pts c/u
+  • Líder:   2 pts c/u
+
+Solo cuenta tu línea directa (1er nivel).
+
+Tu progreso:
+  ${teamBuilder.breakdown.gerentes} gerentes × 5 = ${teamBuilder.breakdown.gerentes * 5} pts
+  ${teamBuilder.breakdown.liders} líderes  × 2 = ${teamBuilder.breakdown.liders * 2} pts`}
+          />
+        )}
       </section>
 
       {/* Graduation detail */}
@@ -252,6 +274,20 @@ export default async function DashboardPage({
             <dd className="highlight">{graduacion.current.toFixed(1)} / {graduacion.target}</dd>
           </dl>
         </div>
+
+        {teamBuilder && (
+          <div className="detail-card">
+            <h3>Team Builder</h3>
+            <dl>
+              <dt>Gerentes en línea directa</dt>
+              <dd>{teamBuilder.breakdown.gerentes} × 5 pts = {teamBuilder.breakdown.gerentes * 5} pts</dd>
+              <dt>Líderes en línea directa</dt>
+              <dd>{teamBuilder.breakdown.liders} × 2 pts = {teamBuilder.breakdown.liders * 2} pts</dd>
+              <dt>Total</dt>
+              <dd className="highlight">{teamBuilder.current} / {teamBuilder.target} pts</dd>
+            </dl>
+          </div>
+        )}
       </section>
 
       <footer className="dashboard-footer">
