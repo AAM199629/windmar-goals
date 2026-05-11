@@ -42,7 +42,7 @@ function graduacionRules(role: string, target: number): string {
 Puntos por venta (${role}):
   • Solar/Batería: ${pts['residential solar']} pt
   • Roofing: ${pts['roofing']} pt
-  • PPS/Anchor: ${pts['pps']} pt
+  • PPS/Anker: ${pts['pps']} pt
   • Agua: ${pts['water products']} pt`
 }
 
@@ -144,7 +144,7 @@ export default async function DashboardPage({
           <dl>
             <dt>Solar</dt><dd>{cruise.breakdown.solar.toFixed(1)}</dd>
             <dt>Roofing</dt><dd>{cruise.breakdown.roofing.toFixed(1)}</dd>
-            <dt>Anchor (PPS)</dt><dd>{cruise.breakdown.pps.toFixed(1)}</dd>
+            <dt>Anker (PPS)</dt><dd>{cruise.breakdown.pps.toFixed(1)}</dd>
             <dt>Agua</dt><dd>{cruise.breakdown.water.toFixed(1)}</dd>
             <dt>Asistidas</dt><dd>{cruise.breakdown.asistida.toFixed(1)}</dd>
             <dt>Grad. Consultor</dt><dd>{cruise.breakdown.consultor.toFixed(1)}</dd>
@@ -244,7 +244,7 @@ export default async function DashboardPage({
             <dd>{((graduacion.breakdown['residential solar'] ?? 0) + (graduacion.breakdown['commercial solar'] ?? 0)).toFixed(1)} pts</dd>
             <dt>Roofing</dt>
             <dd>{(graduacion.breakdown['roofing'] ?? 0).toFixed(1)} pts</dd>
-            <dt>PPS/Anchor</dt>
+            <dt>PPS/Anker</dt>
             <dd>{(graduacion.breakdown['pps'] ?? 0).toFixed(1)} pts</dd>
             <dt>Agua</dt>
             <dd>{(graduacion.breakdown['water products'] ?? 0).toFixed(1)} pts</dd>
