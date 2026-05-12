@@ -8,6 +8,7 @@ import {
   ASISTIDA_POINTS,
   monthlyTarget,
   normalizeRole,
+  nextGradRole,
   plinkoTarget,
   ruletaTarget,
   GRAD_POINTS,
@@ -215,8 +216,9 @@ export function buildMetrics(params: {
     ? { current: ruletaCurrent, target: ruletaTgt, role, month: currentMonth }
     : null
 
-  // ── Graduación ─────────────────────────────────────────────────────────────
-  const gradPts = GRAD_POINTS[role] ?? GRAD_POINTS.trainee
+  // ── Graduación (progress toward NEXT level, not current) ──────────────────
+  const targetRole = nextGradRole(role)  // trainee→consultor, consultor→lider, lider→gerente
+  const gradPts = GRAD_POINTS[targetRole] ?? GRAD_POINTS.consultor
   const gradBreakdown: Record<string, number> = {}
   let gradTotal = 0
   for (const [pipeline, pts] of Object.entries(gradPts)) {
@@ -227,8 +229,8 @@ export function buildMetrics(params: {
 
   const graduacion: GraduacionMetrics = {
     current:   gradTotal,
-    target:    GRAD_TARGET[role] ?? 20,
-    role,
+    target:    GRAD_TARGET[targetRole] ?? 20,
+    role:      targetRole,  // shows the level they're working toward
     breakdown: gradBreakdown,
     month:     currentMonth,
   }

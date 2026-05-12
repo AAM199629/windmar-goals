@@ -55,6 +55,13 @@ export function normalizeRole(role: string | null | undefined): 'trainee' | 'con
   return 'trainee'
 }
 
+// Next level in the career path (used for graduation goal targeting)
+export function nextGradRole(role: 'trainee' | 'consultor' | 'lider' | 'gerente'): 'consultor' | 'lider' | 'gerente' {
+  if (role === 'trainee')   return 'consultor'
+  if (role === 'consultor') return 'lider'
+  return 'gerente' // lider → gerente; gerente stays at gerente (won't show graduation card)
+}
+
 // Pipelines that qualify for Plinko and Ruleta prizes
 export const PREMIO_PIPELINES = ['residential solar', 'commercial solar', 'roofing']
 
