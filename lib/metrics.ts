@@ -98,9 +98,10 @@ export interface GoalsMetrics {
     breakdown:      CruiseBreakdown
   }
   monthly: {
-    current: number
-    target:  number
-    month:   string
+    current:   number
+    target:    number
+    month:     string
+    breakdown: Record<string, number>
   }
   plinko:      PlinkoMetrics
   ruleta:      RuletaMetrics | null
@@ -265,9 +266,10 @@ export function buildMetrics(params: {
       breakdown:      cruiseBreakdown,
     },
     monthly: {
-      current: monthlyCount,
-      target:  monthlyTarget(currentMonth),
-      month:   currentMonth,
+      current:   monthlyCount,
+      target:    monthlyTarget(currentMonth),
+      month:     currentMonth,
+      breakdown: monthlyPipelines,
     },
     plinko,
     ruleta,
