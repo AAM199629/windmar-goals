@@ -155,18 +155,23 @@ export default async function DashboardPage({
 
         <div className="detail-card">
           <h3>Meta Mensual</h3>
-          <dl>
-            <dt>Mes</dt><dd>{monthly.month}</dd>
-            <dt>Solar</dt>
-            <dd>{((monthly.breakdown['residential solar'] ?? 0) + (monthly.breakdown['commercial solar'] ?? 0))}</dd>
-            <dt>Roofing</dt>
-            <dd>{monthly.breakdown['roofing'] ?? 0}</dd>
-            <dt>PPS/Anker</dt>
-            <dd>{monthly.breakdown['pps'] ?? 0}</dd>
-            <dt>Agua</dt>
-            <dd>{monthly.breakdown['water products'] ?? 0}</dd>
-            <dt>Total</dt><dd className="highlight">{monthly.current} / {monthly.target}</dd>
-          </dl>
+          {(() => {
+            const bd: Record<string, number> = (monthly as any).breakdown ?? {}
+            return (
+              <dl>
+                <dt>Mes</dt><dd>{monthly.month}</dd>
+                <dt>Solar</dt>
+                <dd>{(bd['residential solar'] ?? 0) + (bd['commercial solar'] ?? 0)}</dd>
+                <dt>Roofing</dt>
+                <dd>{bd['roofing'] ?? 0}</dd>
+                <dt>PPS/Anker</dt>
+                <dd>{bd['pps'] ?? 0}</dd>
+                <dt>Agua</dt>
+                <dd>{bd['water products'] ?? 0}</dd>
+                <dt>Total</dt><dd className="highlight">{monthly.current} / {monthly.target}</dd>
+              </dl>
+            )
+          })()}
         </div>
       </section>
 
