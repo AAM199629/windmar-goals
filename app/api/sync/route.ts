@@ -74,6 +74,7 @@ export async function POST(req: Request) {
     const members = await query<RepMember>(`
       SELECT
         member_id, full_name, email, status, sales_role,
+        sponsor_id,
         upline_level_1, upline_level_2, upline_level_3, upline_level_4,
         consultor_start_date, lider_start_date, gerente_start_date
       FROM dw_zoho.dim_sales_team_member
@@ -260,9 +261,10 @@ export async function POST(req: Request) {
         if (!teamMembersOf[uplineId]) teamMembersOf[uplineId] = []
         teamMembersOf[uplineId].push(m)
       }
-      if (m.upline_level_1) {
-        if (!directLineMembersOf[m.upline_level_1]) directLineMembersOf[m.upline_level_1] = []
-        directLineMembersOf[m.upline_level_1].push(m)
+      // sponsor_id is the actual member_id of who recruited this person (upline_level_1 stores a name, not an ID)
+      if (m.sponsor_id) {
+        if (!directLineMembersOf[m.sponsor_id]) directLineMembersOf[m.sponsor_id] = []
+        directLineMembersOf[m.sponsor_id].push(m)
       }
     }
 

@@ -25,6 +25,7 @@ export interface RepMember {
   email:                string
   status:               string | null
   sales_role:           string | null
+  sponsor_id:           string | null
   upline_level_1:       string | null
   upline_level_2:       string | null
   upline_level_3:       string | null
