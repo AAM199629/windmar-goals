@@ -193,19 +193,21 @@ export default async function DashboardPage({
           />
         )}
 
-        <GoalCard
-          title="GRADUACIÓN"
-          current={Number(graduacion.current.toFixed(1))}
-          target={graduacion.target}
-          label={`${graduacion.target} pts`}
-          sublabel={`${graduacion.role.charAt(0).toUpperCase() + graduacion.role.slice(1)} — ${graduacion.month}`}
-          bgImage="/bierrete.png"
-          bgPosition="center center"
-          bgSize="cover"
-          unit="pts"
-          progressIcon="🎓"
-          rules={graduacionRules(graduacion.role, graduacion.target)}
-        />
+        {!teamBuilder && (
+          <GoalCard
+            title="GRADUACIÓN"
+            current={Number(graduacion.current.toFixed(1))}
+            target={graduacion.target}
+            label={`${graduacion.target} pts`}
+            sublabel={`${graduacion.role.charAt(0).toUpperCase() + graduacion.role.slice(1)} — ${graduacion.month}`}
+            bgImage="/bierrete.png"
+            bgPosition="center center"
+            bgSize="cover"
+            unit="pts"
+            progressIcon="🎓"
+            rules={graduacionRules(graduacion.role, graduacion.target)}
+          />
+        )}
 
         {teamBuilder && (
           <GoalCard
@@ -259,21 +261,23 @@ Tu progreso:
           </div>
         )}
 
-        <div className="detail-card">
-          <h3>Graduación — {graduacion.role}</h3>
-          <dl>
-            <dt>Solar</dt>
-            <dd>{((graduacion.breakdown['residential solar'] ?? 0) + (graduacion.breakdown['commercial solar'] ?? 0)).toFixed(1)} pts</dd>
-            <dt>Roofing</dt>
-            <dd>{(graduacion.breakdown['roofing'] ?? 0).toFixed(1)} pts</dd>
-            <dt>PPS/Anker</dt>
-            <dd>{(graduacion.breakdown['pps'] ?? 0).toFixed(1)} pts</dd>
-            <dt>Agua</dt>
-            <dd>{(graduacion.breakdown['water products'] ?? 0).toFixed(1)} pts</dd>
-            <dt>Total</dt>
-            <dd className="highlight">{graduacion.current.toFixed(1)} / {graduacion.target}</dd>
-          </dl>
-        </div>
+        {!teamBuilder && (
+          <div className="detail-card">
+            <h3>Graduación — {graduacion.role}</h3>
+            <dl>
+              <dt>Solar</dt>
+              <dd>{((graduacion.breakdown['residential solar'] ?? 0) + (graduacion.breakdown['commercial solar'] ?? 0)).toFixed(1)} pts</dd>
+              <dt>Roofing</dt>
+              <dd>{(graduacion.breakdown['roofing'] ?? 0).toFixed(1)} pts</dd>
+              <dt>PPS/Anker</dt>
+              <dd>{(graduacion.breakdown['pps'] ?? 0).toFixed(1)} pts</dd>
+              <dt>Agua</dt>
+              <dd>{(graduacion.breakdown['water products'] ?? 0).toFixed(1)} pts</dd>
+              <dt>Total</dt>
+              <dd className="highlight">{graduacion.current.toFixed(1)} / {graduacion.target}</dd>
+            </dl>
+          </div>
+        )}
 
         {teamBuilder && (
           <div className="detail-card">
