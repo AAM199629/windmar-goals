@@ -1,8 +1,15 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // Allow the dashboard page to be rendered fresh on every request
-  // (metrics come from KV which updates via sync)
+  async redirects() {
+    return [
+      {
+        source: '/:zohoId(\\d{10,})',
+        destination: '/p/:zohoId',
+        permanent: false,
+      },
+    ]
+  },
 }
 
 export default nextConfig
