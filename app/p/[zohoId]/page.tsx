@@ -66,12 +66,29 @@ export default async function DashboardPage({
     )
   }
 
-  const { tesla, cruise, monthly, plinko, ruleta, graduacion, teamBuilder } = metrics
+  const { tesla, cruise, monthly, teamBuilder } = metrics
+  const plinko     = metrics.plinko
+  const ruleta     = metrics.ruleta
+  const graduacion = metrics.graduacion
 
+  // Guard: old KV records may be missing new fields entirely
+  if (!plinko || !graduacion) {
+    return (
+      <main className="not-found">
+        <div className="not-found-box">
+          <h1>Datos desactualizados</h1>
+          <p>El perfil de {metrics.name} necesita actualizarse.<br />
+            Pide al administrador que corra el sync.</p>
+        </div>
+      </main>
+    )
+  }
+
+  const cbd = cruise.breakdown ?? {} as any
   const cruiseSublabel = (
-    cruise.breakdown.consultor + cruise.breakdown.lider + cruise.breakdown.gerente
+    (cbd.consultor ?? 0) + (cbd.lider ?? 0) + (cbd.gerente ?? 0)
   ) > 0
-    ? `${(cruise.breakdown.consultor + cruise.breakdown.lider + cruise.breakdown.gerente).toFixed(1)} pts grad.`
+    ? `${((cbd.consultor ?? 0) + (cbd.lider ?? 0) + (cbd.gerente ?? 0)).toFixed(1)} pts grad.`
     : undefined
 
   return (
@@ -140,14 +157,14 @@ export default async function DashboardPage({
         <div className="detail-card">
           <h3>Crucero — Puntos</h3>
           <dl>
-            <dt>Solar</dt><dd>{cruise.breakdown.solar.toFixed(1)}</dd>
-            <dt>Roofing</dt><dd>{cruise.breakdown.roofing.toFixed(1)}</dd>
-            <dt>Anker (PPS)</dt><dd>{cruise.breakdown.pps.toFixed(1)}</dd>
-            <dt>Agua</dt><dd>{cruise.breakdown.water.toFixed(1)}</dd>
-            <dt>Asistidas</dt><dd>{cruise.breakdown.asistida.toFixed(1)}</dd>
-            <dt>Grad. Consultor</dt><dd>{cruise.breakdown.consultor.toFixed(1)}</dd>
-            <dt>Grad. Líder</dt><dd>{cruise.breakdown.lider.toFixed(1)}</dd>
-            <dt>Grad. Gerente</dt><dd>{cruise.breakdown.gerente.toFixed(1)}</dd>
+            <dt>Solar</dt><dd>{(cbd.solar ?? 0).toFixed(1)}</dd>
+            <dt>Roofing</dt><dd>{(cbd.roofing ?? 0).toFixed(1)}</dd>
+            <dt>Anker (PPS)</dt><dd>{(cbd.pps ?? 0).toFixed(1)}</dd>
+            <dt>Agua</dt><dd>{(cbd.water ?? 0).toFixed(1)}</dd>
+            <dt>Asistidas</dt><dd>{(cbd.asistida ?? 0).toFixed(1)}</dd>
+            <dt>Grad. Consultor</dt><dd>{(cbd.consultor ?? 0).toFixed(1)}</dd>
+            <dt>Grad. Líder</dt><dd>{(cbd.lider ?? 0).toFixed(1)}</dd>
+            <dt>Grad. Gerente</dt><dd>{(cbd.gerente ?? 0).toFixed(1)}</dd>
             <dt>Pts personales</dt><dd>{cruise.personal.toFixed(1)} / {cruise.personalTarget}</dd>
             <dt>Total</dt><dd className="highlight">{cruise.total.toFixed(1)} / {cruise.target}</dd>
           </dl>
@@ -277,18 +294,23 @@ Tu progreso:
         {!teamBuilder && (
           <div className="detail-card">
             <h3>Graduación — {graduacion.role}</h3>
-            <dl>
-              <dt>Solar</dt>
-              <dd>{((graduacion.breakdown['residential solar'] ?? 0) + (graduacion.breakdown['commercial solar'] ?? 0)).toFixed(1)} pts</dd>
-              <dt>Roofing</dt>
-              <dd>{(graduacion.breakdown['roofing'] ?? 0).toFixed(1)} pts</dd>
-              <dt>PPS/Anker</dt>
-              <dd>{(graduacion.breakdown['pps'] ?? 0).toFixed(1)} pts</dd>
-              <dt>Agua</dt>
-              <dd>{(graduacion.breakdown['water products'] ?? 0).toFixed(1)} pts</dd>
-              <dt>Total</dt>
-              <dd className="highlight">{graduacion.current.toFixed(1)} / {graduacion.target}</dd>
-            </dl>
+            {(() => {
+              const gb: Record<string, number> = (graduacion as any).breakdown ?? {}
+              return (
+                <dl>
+                  <dt>Solar</dt>
+                  <dd>{((gb['residential solar'] ?? 0) + (gb['commercial solar'] ?? 0)).toFixed(1)} pts</dd>
+                  <dt>Roofing</dt>
+                  <dd>{(gb['roofing'] ?? 0).toFixed(1)} pts</dd>
+                  <dt>PPS/Anker</dt>
+                  <dd>{(gb['pps'] ?? 0).toFixed(1)} pts</dd>
+                  <dt>Agua</dt>
+                  <dd>{(gb['water products'] ?? 0).toFixed(1)} pts</dd>
+                  <dt>Total</dt>
+                  <dd className="highlight">{graduacion.current.toFixed(1)} / {graduacion.target}</dd>
+                </dl>
+              )
+            })()}
           </div>
         )}
 
