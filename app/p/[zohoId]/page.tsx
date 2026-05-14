@@ -119,7 +119,7 @@ export default async function DashboardPage({
 
         <GoalCard
           title="CRUISE COMPETITION"
-          current={cruise.total}
+          current={cruise.total ?? 0}
           target={cruise.target}
           label={`${cruise.target} pts`}
           sublabel={cruiseSublabel}
@@ -165,8 +165,8 @@ export default async function DashboardPage({
             <dt>Grad. Consultor</dt><dd>{(cbd.consultor ?? 0).toFixed(1)}</dd>
             <dt>Grad. Líder</dt><dd>{(cbd.lider ?? 0).toFixed(1)}</dd>
             <dt>Grad. Gerente</dt><dd>{(cbd.gerente ?? 0).toFixed(1)}</dd>
-            <dt>Pts personales</dt><dd>{cruise.personal.toFixed(1)} / {cruise.personalTarget}</dd>
-            <dt>Total</dt><dd className="highlight">{cruise.total.toFixed(1)} / {cruise.target}</dd>
+            <dt>Pts personales</dt><dd>{(cruise.personal ?? 0).toFixed(1)} / {cruise.personalTarget ?? '—'}</dd>
+            <dt>Total</dt><dd className="highlight">{(cruise.total ?? 0).toFixed(1)} / {cruise.target}</dd>
           </dl>
         </div>
 
