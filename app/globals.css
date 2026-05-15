@@ -466,6 +466,21 @@
   font-size: 0.9rem;
 }
 
+.search-btn {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 0.7rem 1.75rem;
+  background: var(--navy);
+  color: #fff;
+  border-radius: 8px;
+  font-family: var(--font-cond);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.search-btn:hover { background: var(--blue); }
+
 /* ══════════════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════════════ */

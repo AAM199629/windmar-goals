@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics } from '@/lib/kv'
+import { setMetrics, setMembersList } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
 import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END } from '@/lib/config'
 
@@ -301,6 +301,13 @@ export async function POST(req: Request) {
 
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length
+
+    // Save compact members index for the directory/search page
+    const membersList = results
+      .filter(r => r.ok)
+      .map(r => ({ zohoId: r.zohoId, name: r.name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    await setMembersList(membersList)
 
     return NextResponse.json({
       ok: true,

@@ -59,8 +59,11 @@ export default async function DashboardPage({
       <main className="not-found">
         <div className="not-found-box">
           <h1>Dashboard no disponible</h1>
-          <p>No se encontraron datos para este vendedor.<br />
-            Pide al administrador que corra el sync.</p>
+          <p>No se encontraron datos para este perfil.<br />
+            Puedes buscar otro vendedor en el directorio.</p>
+          <a href="/search" className="search-btn">
+            🔍 Buscar vendedor
+          </a>
         </div>
       </main>
     )
