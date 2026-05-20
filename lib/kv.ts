@@ -34,3 +34,10 @@ export async function setMembersList(members: MemberEntry[]): Promise<void> {
 export async function getMembersList(): Promise<MemberEntry[]> {
   return (await redis.get<MemberEntry[]>(`${PREFIX}:members`)) ?? []
 }
+
+export async function getAllMetrics(): Promise<GoalsMetrics[]> {
+  const keys = await getAllMetricKeys()
+  if (!keys.length) return []
+  const results = await redis.mget<GoalsMetrics[]>(...keys)
+  return results.filter((r): r is GoalsMetrics => r !== null)
+}
