@@ -167,7 +167,7 @@ export async function POST(req: Request) {
       LEFT JOIN dw_zoho.dim_sales_team_member stm_trainee
         ON LOWER(stm_trainee.email) = LOWER(ds.sale_rep_email)
       LEFT JOIN dw_zoho.dim_sales_team_member stm_mentor
-        ON stm_mentor.member_id = stm_trainee.upline_level_1
+        ON stm_mentor.member_id = stm_trainee.sponsor_id
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -252,21 +252,16 @@ export async function POST(req: Request) {
       if (r.mentor_id) asistidaMap[r.mentor_id] = Number(r.cnt)
     }
 
-    // Pre-build: for each member, find their direct/indirect reports
-    const teamMembersOf: Record<string, RepMember[]> = {}
-    const directLineMembersOf: Record<string, RepMember[]> = {}
+    // Pre-build: sponsor_id is the recruiter's member_id (upline_level_1–4 are null in this dataset)
+    const directReportsOf: Record<string, RepMember[]> = {}
     for (const m of members) {
-      for (const uplineId of [m.upline_level_1, m.upline_level_2, m.upline_level_3, m.upline_level_4]) {
-        if (!uplineId) continue
-        if (!teamMembersOf[uplineId]) teamMembersOf[uplineId] = []
-        teamMembersOf[uplineId].push(m)
-      }
-      // sponsor_id is the actual member_id of who recruited this person (upline_level_1 stores a name, not an ID)
       if (m.sponsor_id) {
-        if (!directLineMembersOf[m.sponsor_id]) directLineMembersOf[m.sponsor_id] = []
-        directLineMembersOf[m.sponsor_id].push(m)
+        if (!directReportsOf[m.sponsor_id]) directReportsOf[m.sponsor_id] = []
+        directReportsOf[m.sponsor_id].push(m)
       }
     }
+
+    const directLineMembersOf = directReportsOf
 
     // ── 10. Build and persist metrics for each member ─────────────────────────
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
@@ -279,7 +274,7 @@ export async function POST(req: Request) {
             teslaCounts:       teslaPipelineMap[member.member_id]      ?? {},
             teamCounts:        teamPipelineMap[member.member_id]       ?? {},
             cruiseCounts:      cruisePipelineMap[member.member_id]     ?? {},
-            teamMembers:       teamMembersOf[member.member_id]         ?? [],
+            teamMembers:       directReportsOf[member.member_id] ?? [],
             directLineMembers: directLineMembersOf[member.member_id]   ?? [],
             asistidaCount:     asistidaMap[member.member_id]           ?? 0,
             monthlyCount:      monthlyMap[member.member_id]            ?? 0,

@@ -121,6 +121,10 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     member,
+    pipelinesTesl,
+    allStages,
+    viaJoin,
+    monthlyDirect,
     tablesWithProductSale,
     productSaleSample,
     dwhTables,

@@ -130,16 +130,17 @@ function calcCruisePts(counts: PipelineCounts): number {
 }
 
 function calcGraduationPts(
-  member:      RepMember,
-  cruiseStart: string,
-  cruiseEnd:   string,
+  member: RepMember,
 ): { consultor: number; lider: number; gerente: number } {
+  const year     = new Date().getFullYear()
+  const yearStart = `${year}-01-01`
+  const yearEnd   = `${year}-12-31`
   return {
-    consultor: dateInRange(member.consultor_start_date, cruiseStart, cruiseEnd)
+    consultor: dateInRange(member.consultor_start_date, yearStart, yearEnd)
       ? GRADUATION_POINTS.consultor : 0,
-    lider:     dateInRange(member.lider_start_date, cruiseStart, cruiseEnd)
+    lider:     dateInRange(member.lider_start_date, yearStart, yearEnd)
       ? GRADUATION_POINTS.lider : 0,
-    gerente:   dateInRange(member.gerente_start_date, cruiseStart, cruiseEnd)
+    gerente:   dateInRange(member.gerente_start_date, yearStart, yearEnd)
       ? GRADUATION_POINTS.gerente : 0,
   }
 }
@@ -190,7 +191,7 @@ export function buildMetrics(params: {
   }
 
   for (const tm of teamMembers) {
-    const grad = calcGraduationPts(tm, cruiseStart, cruiseEnd)
+    const grad = calcGraduationPts(tm)
     cruiseBreakdown.consultor += grad.consultor
     cruiseBreakdown.lider     += grad.lider
     cruiseBreakdown.gerente   += grad.gerente
