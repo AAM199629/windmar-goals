@@ -11,7 +11,7 @@ function getPool(): Pool {
       user:     process.env.REDSHIFT_USER,
       password: process.env.REDSHIFT_PASSWORD,
       ssl:      { rejectUnauthorized: false },
-      max:      3,
+      max:      5,
       idleTimeoutMillis: 30_000,
     })
   }

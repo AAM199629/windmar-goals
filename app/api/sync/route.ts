@@ -57,16 +57,7 @@ function toPipelineMap(rows: PipelineRow[]): Record<string, PipelineCounts> {
   return map
 }
 
-export async function POST(req: Request) {
-  try {
-    const url    = new URL(req.url)
-    const token  = (url.searchParams.get('token') ?? '').trim()
-    const secret = (process.env.ADMIN_TOKEN ?? '').trim()
-    if (secret && token !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const month           = url.searchParams.get('month') ?? currentYYYYMM()
+async function runSync(month: string) {
     const { first, last } = monthRange(month)
     const { monday, sunday } = currentWeekRange()
 
@@ -84,7 +75,7 @@ export async function POST(req: Request) {
     `)
 
     if (members.length === 0) {
-      return NextResponse.json({ error: 'No team members found in dw_zoho.dim_sales_team_member' }, { status: 502 })
+      throw new Error('No team members found in dw_zoho.dim_sales_team_member')
     }
 
     // ── 2. Personal deal counts by pipeline for Tesla period ──────────────────
@@ -304,16 +295,46 @@ export async function POST(req: Request) {
       .sort((a, b) => a.name.localeCompare(b.name))
     await setMembersList(membersList)
 
-    return NextResponse.json({
-      ok: true,
-      month,
-      weekRange: { monday, sunday },
-      total: members.length,
-      succeeded,
-      failed,
-      errors:    results.filter(r => !r.ok),
-      updatedAt: new Date().toISOString(),
-    })
+  return {
+    ok: true,
+    month,
+    weekRange: { monday, sunday },
+    total: members.length,
+    succeeded,
+    failed,
+    errors:    results.filter(r => !r.ok),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export async function GET(req: Request) {
+  const cronSecret = (process.env.CRON_SECRET ?? '').trim()
+  const authHeader = req.headers.get('authorization') ?? ''
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  try {
+    const result = await runSync(currentYYYYMM())
+    return NextResponse.json(result)
+  } catch (e) {
+    return NextResponse.json(
+      { error: String(e), stack: e instanceof Error ? e.stack : undefined },
+      { status: 500 },
+    )
+  }
+}
+
+export async function POST(req: Request) {
+  const url    = new URL(req.url)
+  const token  = (url.searchParams.get('token') ?? '').trim()
+  const secret = (process.env.ADMIN_TOKEN ?? '').trim()
+  if (secret && token !== secret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  try {
+    const month  = url.searchParams.get('month') ?? currentYYYYMM()
+    const result = await runSync(month)
+    return NextResponse.json(result)
   } catch (e) {
     return NextResponse.json(
       { error: String(e), stack: e instanceof Error ? e.stack : undefined },
