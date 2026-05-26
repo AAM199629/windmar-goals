@@ -7,10 +7,11 @@ import {
 } from '@/lib/config'
 
 export interface LeaderboardRow {
-  zohoId:    string
-  name:      string
-  total:     number
-  personal:  number
+  zohoId:         string
+  name:           string
+  total:          number
+  personal:       number
+  paceStartDate:  string  // effective start for monthly-pace calculation
   breakdown: {
     solar:     number
     roofing:   number
@@ -157,7 +158,16 @@ const fetchLeaderboard = unstable_cache(
       const personal = solar + roofing + water + pps
       const total    = personal + asistida + consultor + lider + gerente
 
-      return { zohoId: m.member_id, name: m.full_name, total, personal, breakdown: { solar, roofing, water, pps, asistida, consultor, lider, gerente } }
+      // For 2026 joiners use their earliest role date; otherwise use competition start
+      const roleDates = [m.consultor_start_date, m.lider_start_date, m.gerente_start_date]
+        .filter((d): d is string => !!d)
+        .map(d => d.slice(0, 10))
+        .sort()
+      const paceStartDate = roleDates.length > 0 && roleDates[0] > CRUISE_START
+        ? roleDates[0]
+        : CRUISE_START
+
+      return { zohoId: m.member_id, name: m.full_name, total, personal, paceStartDate, breakdown: { solar, roofing, water, pps, asistida, consultor, lider, gerente } }
     })
 
     rows.sort((a, b) => b.total - a.total)

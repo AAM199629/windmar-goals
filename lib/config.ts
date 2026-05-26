@@ -15,7 +15,7 @@ function currentTeslaPeriod() {
 const _tesla = currentTeslaPeriod()
 export const TESLA_START = process.env.TESLA_START_DATE ?? _tesla.start
 export const TESLA_END   = process.env.TESLA_END_DATE   ?? _tesla.end
-export const CRUISE_START = process.env.CRUISE_START_DATE ?? '2025-11-01'
+export const CRUISE_START = process.env.CRUISE_START_DATE ?? '2026-01-01'
 export const CRUISE_END   = process.env.CRUISE_END_DATE   ?? '2026-12-31'
 
 // Pipeline field values from dwh.dim_profiles (lowercase)
