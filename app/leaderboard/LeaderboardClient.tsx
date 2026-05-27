@@ -88,11 +88,20 @@ export default function LeaderboardClient() {
   const cruiseEnd    = data?.cruiseEnd ?? '2026-12-31'
 
   const withPoints = rows.filter(m => m.total > 0).length
-  const qualified  = rows.filter(m => m.total >= cruiseTarget).length
 
-  const endDate  = new Date(cruiseEnd + 'T00:00:00')
   const today    = new Date()
+  const endDate  = new Date(cruiseEnd + 'T00:00:00')
   const daysLeft = Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / 86_400_000))
+
+  // On-pace: ≥5 pts/month relative to each member's effective start date
+  // (mid-year joiners use their company start date; veterans use competition start Jan-2026)
+  const onPace = rows.filter(m => {
+    if (m.total <= 0) return false
+    const startStr = m.paceStartDate ?? '2026-01-01'
+    const mStart   = new Date(startStr + 'T00:00:00')
+    const mElapsed = Math.max(1, (today.getTime() - mStart.getTime()) / (30.44 * 86_400_000))
+    return (m.total / mElapsed) >= 5
+  }).length
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--light)', paddingBottom: '3rem' }}>
@@ -205,7 +214,7 @@ export default function LeaderboardClient() {
             {[
               { big: loading ? '…' : String(rows.length), label: 'VENDEDORES',  sub: 'EN COMPETENCIA',  accent: 'rgba(255,255,255,0.9)' },
               { big: loading ? '…' : String(daysLeft),    label: 'DÍAS',        sub: 'RESTANTES',       accent: '#7EC8E3' },
-              { big: loading ? '…' : String(qualified),   label: qualified === 1 ? 'CLASIFICADO' : 'CLASIFICADOS', sub: 'HASTA AHORA', accent: !loading && qualified > 0 ? 'var(--gold)' : 'rgba(255,255,255,0.4)' },
+              { big: loading ? '…' : String(onPace), label: onPace === 1 ? 'VA EN RITMO' : 'VAN EN RITMO', sub: '≥5 PTS / MES', accent: !loading && onPace > 0 ? 'var(--gold)' : 'rgba(255,255,255,0.4)' },
             ].map(({ big, label, sub, accent }) => (
               <div key={big + label} style={{
                 background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
