@@ -89,11 +89,13 @@ export default function LeaderboardClient() {
 
   const withPoints = rows.filter(m => m.total > 0).length
 
-  const today    = new Date()
-  const endDate  = new Date(cruiseEnd + 'T00:00:00')
-  const daysLeft = Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / 86_400_000))
+  const today      = new Date()
+  const endDate    = new Date(cruiseEnd + 'T00:00:00')
+  const daysLeft   = Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / 86_400_000))
 
-  const onPace = rows.filter(m => m.total >= 22.5).length
+  const compStart  = new Date('2026-01-01T00:00:00')
+  const mElapsed   = Math.max(1, (today.getTime() - compStart.getTime()) / (30.44 * 86_400_000))
+  const onPace     = rows.filter(m => m.total > 0 && (m.total / mElapsed) >= 4.5).length
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--light)', paddingBottom: '3rem' }}>
@@ -206,7 +208,7 @@ export default function LeaderboardClient() {
             {[
               { big: loading ? '…' : String(rows.length), label: 'VENDEDORES',  sub: 'EN COMPETENCIA',  accent: 'rgba(255,255,255,0.9)' },
               { big: loading ? '…' : String(daysLeft),    label: 'DÍAS',        sub: 'RESTANTES',       accent: '#7EC8E3' },
-              { big: loading ? '…' : String(onPace), label: onPace === 1 ? 'VA EN RITMO' : 'VAN EN RITMO', sub: '≥22.5 PTS', accent: !loading && onPace > 0 ? 'var(--gold)' : 'rgba(255,255,255,0.4)' },
+              { big: loading ? '…' : String(onPace), label: onPace === 1 ? 'VA EN RITMO' : 'VAN EN RITMO', sub: '≥4.5 PTS / MES', accent: !loading && onPace > 0 ? 'var(--gold)' : 'rgba(255,255,255,0.4)' },
             ].map(({ big, label, sub, accent }) => (
               <div key={big + label} style={{
                 background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
