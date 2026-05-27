@@ -100,7 +100,7 @@ export default function LeaderboardClient() {
     const startStr = m.paceStartDate ?? '2026-01-01'
     const mStart   = new Date(startStr + 'T00:00:00')
     const mElapsed = Math.max(1, (today.getTime() - mStart.getTime()) / (30.44 * 86_400_000))
-    return (m.total / mElapsed) >= 5
+    return (m.total / mElapsed) >= 4.5
   }).length
 
   return (
