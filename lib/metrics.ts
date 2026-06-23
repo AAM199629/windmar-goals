@@ -53,17 +53,19 @@ export interface CruiseBreakdown {
 }
 
 export interface PlinkoMetrics {
-  current:   number
-  target:    number
-  role:      string
-  weekStart: string
+  current:        number
+  target:         number
+  role:           string
+  weekStart:      string
+  weeklyPipelines: Record<string, number>
 }
 
 export interface RuletaMetrics {
-  current: number
-  target:  number
-  role:    string
-  month:   string
+  current:         number
+  target:          number
+  role:            string
+  month:           string
+  monthlyPipelines: Record<string, number>
 }
 
 export interface GraduacionMetrics {
@@ -205,17 +207,18 @@ export function buildMetrics(params: {
 
   // ── Plinko ─────────────────────────────────────────────────────────────────
   const plinko: PlinkoMetrics = {
-    current:   sumPipelinesFor(weeklyPipelines, PREMIO_PIPELINES),
-    target:    plinkoTarget(member.sales_role),
+    current:         sumPipelinesFor(weeklyPipelines, PREMIO_PIPELINES),
+    target:          plinkoTarget(member.sales_role),
     role,
     weekStart,
+    weeklyPipelines,
   }
 
   // ── Ruleta ─────────────────────────────────────────────────────────────────
   const ruletaCurrent = sumPipelinesFor(monthlyPipelines, PREMIO_PIPELINES)
   const ruletaTgt     = ruletaTarget(member.sales_role, mm)
   const ruleta: RuletaMetrics | null = ruletaTgt !== null
-    ? { current: ruletaCurrent, target: ruletaTgt, role, month: currentMonth }
+    ? { current: ruletaCurrent, target: ruletaTgt, role, month: currentMonth, monthlyPipelines }
     : null
 
   // ── Graduación (progress toward NEXT level, not current) ──────────────────
@@ -249,6 +252,12 @@ export function buildMetrics(params: {
     teamBuilder = { current: tbPts, target: TEAM_BUILDER_TARGET, breakdown: { gerentes: gerenteCount, liders: liderCount } }
   }
 
+  // PPS/Anker = 0.5 per sale; all other pipelines = 1
+  const weightedMonthly = Object.entries(monthlyPipelines).reduce(
+    (acc, [p, cnt]) => acc + cnt * (p === 'pps' ? 0.5 : 1),
+    0,
+  )
+
   return {
     zohoId: member.member_id,
     name:   member.full_name,
@@ -267,7 +276,7 @@ export function buildMetrics(params: {
       breakdown:      cruiseBreakdown,
     },
     monthly: {
-      current:   monthlyCount,
+      current:   weightedMonthly,
       target:    monthlyTarget(currentMonth),
       month:     currentMonth,
       breakdown: monthlyPipelines,

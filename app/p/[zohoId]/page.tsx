@@ -188,7 +188,7 @@ export default async function DashboardPage({
                 <dd>{bd['pps'] ?? 0}</dd>
                 <dt>Agua</dt>
                 <dd>{bd['water products'] ?? 0}</dd>
-                <dt>Total</dt><dd className="highlight">{monthly.current} / {monthly.target}</dd>
+                <dt>Total</dt><dd className="highlight">{Number.isInteger(monthly.current) ? monthly.current : monthly.current.toFixed(1)} / {monthly.target}</dd>
               </dl>
             )
           })()}
@@ -274,9 +274,9 @@ Tu progreso:
           <h3>Plinko — Semana</h3>
           <dl>
             <dt>Solar</dt>
-            <dd>{(plinko as any).weeklyPipelines?.['residential solar'] ?? '—'}</dd>
+            <dd>{plinko.weeklyPipelines['residential solar'] || '—'}</dd>
             <dt>Roofing</dt>
-            <dd>{(plinko as any).weeklyPipelines?.['roofing'] ?? '—'}</dd>
+            <dd>{plinko.weeklyPipelines['roofing'] || '—'}</dd>
             <dt>Semana</dt><dd>{plinko.weekStart}</dd>
             <dt>Total elegibles</dt>
             <dd className="highlight">{plinko.current} / {plinko.target}</dd>
@@ -287,6 +287,10 @@ Tu progreso:
           <div className="detail-card">
             <h3>Ruleta — Mes</h3>
             <dl>
+              <dt>Solar</dt>
+              <dd>{ruleta.monthlyPipelines['residential solar'] || '—'}</dd>
+              <dt>Roofing</dt>
+              <dd>{ruleta.monthlyPipelines['roofing'] || '—'}</dd>
               <dt>Mes</dt><dd>{ruleta.month}</dd>
               <dt>Total elegibles</dt>
               <dd className="highlight">{ruleta.current} / {ruleta.target}</dd>
