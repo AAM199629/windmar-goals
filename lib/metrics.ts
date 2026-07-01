@@ -14,6 +14,9 @@ import {
   GRAD_POINTS,
   GRAD_TARGET,
   PREMIO_PIPELINES,
+  COMPTESLA_POINTS,
+  COMPTESLA_START,
+  COMPTESLA_END,
 } from './config'
 
 const TEAM_BUILDER_TARGET = 10
@@ -82,6 +85,16 @@ export interface TeamBuilderMetrics {
   breakdown: { gerentes: number; liders: number }
 }
 
+export interface CompetenciaTeslaMetrics {
+  points:          number   // número grande de la tarjeta
+  ventas:          number   // total ventas Tesla (hacia el mínimo de 10)
+  bateriaConSolar: number
+  bateriaSola:     number
+  asistida:        number
+  start:           string
+  end:             string
+}
+
 export interface GoalsMetrics {
   zohoId:  string
   name:    string
@@ -109,6 +122,7 @@ export interface GoalsMetrics {
   ruleta:      RuletaMetrics | null
   graduacion:  GraduacionMetrics
   teamBuilder: TeamBuilderMetrics | null
+  competenciaTesla: CompetenciaTeslaMetrics | null
   updatedAt:   string
 }
 
@@ -160,6 +174,7 @@ export function buildMetrics(params: {
   monthlyCount:       number
   weeklyPipelines:    PipelineCounts
   monthlyPipelines:   PipelineCounts
+  teslaCompCounts:    { bateriaConSolar: number; bateriaSola: number; asistida: number }
   currentMonth:       string
   weekStart:          string
   cruiseStart:        string
@@ -167,7 +182,7 @@ export function buildMetrics(params: {
 }): GoalsMetrics {
   const {
     member, teslaCounts, teamCounts, cruiseCounts, teamMembers, directLineMembers,
-    asistidaCount, monthlyCount, weeklyPipelines, monthlyPipelines,
+    asistidaCount, monthlyCount, weeklyPipelines, monthlyPipelines, teslaCompCounts,
     currentMonth, weekStart, cruiseStart, cruiseEnd,
   } = params
 
@@ -252,6 +267,20 @@ export function buildMetrics(params: {
     teamBuilder = { current: tbPts, target: TEAM_BUILDER_TARGET, breakdown: { gerentes: gerenteCount, liders: liderCount } }
   }
 
+  // ── Competencia Tesla ────────────────────────────────────────────────────────
+  const competenciaTesla: CompetenciaTeslaMetrics = {
+    bateriaConSolar: teslaCompCounts.bateriaConSolar,
+    bateriaSola:     teslaCompCounts.bateriaSola,
+    asistida:        teslaCompCounts.asistida,
+    ventas:          teslaCompCounts.bateriaConSolar + teslaCompCounts.bateriaSola,
+    points:
+      teslaCompCounts.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
+      teslaCompCounts.bateriaSola     * COMPTESLA_POINTS.bateriaSola +
+      teslaCompCounts.asistida        * COMPTESLA_POINTS.asistida,
+    start: COMPTESLA_START,
+    end:   COMPTESLA_END,
+  }
+
   // PPS/Anker = 0.5 per sale; all other pipelines = 1
   const weightedMonthly = Object.entries(monthlyPipelines).reduce(
     (acc, [p, cnt]) => acc + cnt * (p === 'pps' ? 0.5 : 1),
@@ -285,6 +314,7 @@ export function buildMetrics(params: {
     ruleta,
     graduacion,
     teamBuilder,
+    competenciaTesla,
     updatedAt: new Date().toISOString(),
   }
 }

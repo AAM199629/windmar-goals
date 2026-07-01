@@ -93,3 +93,14 @@ export const GRAD_POINTS: Record<string, Record<string, number>> = {
 export const GRAD_TARGET: Record<string, number> = {
   trainee: 20, consultor: 20, lider: 20, gerente: 40,
 }
+
+// ── Competencia Tesla (01 jul – 15 oct 2026; corte final +6 días) ──────────────
+export const COMPTESLA_START = process.env.COMPTESLA_START_DATE ?? '2026-07-01'
+export const COMPTESLA_END   = process.env.COMPTESLA_END_DATE   ?? '2026-10-15'
+
+export const COMPTESLA_POINTS = {
+  bateriaConSolar: 1,
+  bateriaSola:     0.5,
+  asistida:        0.5,   // primeras 4 ventas de un trainee, solo productos con Tesla
+}
+export const COMPTESLA_MIN_VENTAS = 10  // requisito mínimo para clasificar

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics, setMembersList } from '@/lib/kv'
+import { setMetrics, setMembersList, setComptesaRankings, type ComptesaRankings } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END } from '@/lib/config'
 
 function currentYYYYMM() {
   const d = new Date()
@@ -226,6 +226,70 @@ async function runSync(month: string) {
       GROUP BY stm.member_id, LOWER(dp.pipeline)
     `, [first, last])
 
+    // ── 8b. Competencia Tesla: batería con solar / sola (ventas propias) ───────
+    // Batería Tesla = battery_qty > 0 AND battery_type contiene 'tesla'.
+    // Con solar (1 pt) = system_size_kw1 > 0 · Sola (0.5 pt) = system_size_kw1 en 0/null.
+    const teslaCompRows = await query<{ member_id: string; bateria_con_solar: string | number; bateria_sola: string | number }>(`
+      SELECT
+        stm.member_id,
+        SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN 1 ELSE 0 END) AS bateria_con_solar,
+        SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN 1 ELSE 0 END) AS bateria_sola
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm
+        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND dsr.stage <> 'Cancelled'
+        AND stm.member_id IS NOT NULL
+        AND COALESCE(fd.battery_qty, 0) > 0
+        AND LOWER(fd.battery_type) LIKE '%tesla%'
+      GROUP BY stm.member_id
+    `, [COMPTESLA_START, COMPTESLA_END])
+
+    // ── 8c. Competencia Tesla: asistidas (1ª–4ª venta Tesla de un trainee → mentor) ─
+    const teslaAsistidaRows = await query<AsistidaRow>(`
+      SELECT stm_mentor.member_id AS mentor_id, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm_trainee
+        ON LOWER(stm_trainee.email) = LOWER(ds.sale_rep_email)
+      LEFT JOIN dw_zoho.dim_sales_team_member stm_mentor
+        ON stm_mentor.member_id = stm_trainee.sponsor_id
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND dsr.stage <> 'Cancelled'
+        AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
+        AND COALESCE(fd.battery_qty, 0) > 0
+        AND LOWER(fd.battery_type) LIKE '%tesla%'
+        AND stm_mentor.member_id IS NOT NULL
+      GROUP BY stm_mentor.member_id
+    `, [COMPTESLA_START, COMPTESLA_END])
+
+    const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number }> = {}
+    for (const r of teslaCompRows) {
+      if (!r.member_id) continue
+      teslaCompMap[r.member_id] = {
+        bateriaConSolar: Number(r.bateria_con_solar) || 0,
+        bateriaSola:     Number(r.bateria_sola)      || 0,
+        asistida:        0,
+      }
+    }
+    for (const r of teslaAsistidaRows) {
+      if (!r.mentor_id) continue
+      const e = teslaCompMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0 }
+      e.asistida = Number(r.cnt) || 0
+      teslaCompMap[r.mentor_id] = e
+    }
+
     // ── 9. Build lookup maps ──────────────────────────────────────────────────
     const teslaPipelineMap    = toPipelineMap(personalTeslaRows)
     const teamPipelineMap     = toPipelineMap(teamTeslaRows)
@@ -256,6 +320,7 @@ async function runSync(month: string) {
 
     // ── 10. Build and persist metrics for each member ─────────────────────────
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
+    const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number }> = []
 
     await Promise.all(
       members.map(async (member) => {
@@ -271,6 +336,7 @@ async function runSync(month: string) {
             monthlyCount:      monthlyMap[member.member_id]            ?? 0,
             weeklyPipelines:   weeklyPipelineMap[member.member_id]     ?? {},
             monthlyPipelines:  monthlyPipelineMap[member.member_id]    ?? {},
+            teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0 },
             currentMonth:      month,
             weekStart:         monday,
             cruiseStart:       CRUISE_START,
@@ -278,12 +344,32 @@ async function runSync(month: string) {
           })
 
           await setMetrics(member.member_id, metrics)
+          if (metrics.competenciaTesla) {
+            comptesla.push({
+              zohoId: member.member_id,
+              name:   member.full_name,
+              role:   metrics.plinko.role,
+              points: metrics.competenciaTesla.points,
+              ventas: metrics.competenciaTesla.ventas,
+            })
+          }
           results.push({ zohoId: member.member_id, name: member.full_name, ok: true })
         } catch (e) {
           results.push({ zohoId: member.member_id, name: member.full_name, ok: false, error: String(e) })
         }
       }),
     )
+
+    // ── 10b. Competencia Tesla: top 10 por rol (trainees NO participan) ────────
+    const rankings: ComptesaRankings = {}
+    for (const role of ['consultor', 'lider', 'gerente']) {
+      rankings[role] = comptesla
+        .filter(c => c.role === role)
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 10)
+        .map(({ zohoId, name, points, ventas }) => ({ zohoId, name, points, ventas }))
+    }
+    await setComptesaRankings(rankings)
 
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length
