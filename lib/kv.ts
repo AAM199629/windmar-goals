@@ -35,6 +35,18 @@ export async function getMembersList(): Promise<MemberEntry[]> {
   return (await redis.get<MemberEntry[]>(`${PREFIX}:members`)) ?? []
 }
 
+// ── Competencia Tesla: top 10 por rol ──────────────────────────────────────────
+export interface ComptesaRankEntry { zohoId: string; name: string; points: number; ventas: number }
+export type ComptesaRankings = Record<string, ComptesaRankEntry[]>  // role → top 10
+
+export async function setComptesaRankings(r: ComptesaRankings): Promise<void> {
+  await redis.set(`${PREFIX}:comptesla:rankings`, r, { ex: 60 * 60 * 25 })
+}
+
+export async function getComptesaRankings(): Promise<ComptesaRankings | null> {
+  return redis.get<ComptesaRankings>(`${PREFIX}:comptesla:rankings`)
+}
+
 export async function getAllMetrics(): Promise<GoalsMetrics[]> {
   const keys = await getAllMetricKeys()
   if (!keys.length) return []

@@ -1,6 +1,6 @@
 import GoalCard from '@/components/GoalCard'
-import { getMetrics } from '@/lib/kv'
-import { GRAD_POINTS } from '@/lib/config'
+import { getMetrics, getComptesaRankings } from '@/lib/kv'
+import { GRAD_POINTS, COMPTESLA_MIN_VENTAS } from '@/lib/config'
 
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
 
@@ -44,6 +44,35 @@ Puntos por venta (${role}):
   • Agua: ${pts['water products']} pt`
 }
 
+function competenciaTeslaRules(): string {
+  return `01 julio – 15 octubre 2026
+(corte final: +6 días)
+
+Criterio: cantidad de Tesla que vendas.
+
+Sistema de puntos:
+  • Batería con solar: 1 pt
+  • Batería sola: 0.5 pt
+  • Venta asistida: 0.5 pt
+    (primeras 4 ventas de un trainee,
+     solo productos con Tesla)
+
+Ganadores: top 10 consultores,
+10 líderes y 10 gerentes.
+
+Requisitos:
+  • 10 ventas mínimo en el periodo
+  • Mínimo 1 venta al mes
+    (si un mes queda en cero → descalificado)`
+}
+
+function rankBadge(rank: number): string {
+  if (rank === 1) return '🥇'
+  if (rank === 2) return '🥈'
+  if (rank === 3) return '🥉'
+  return String(rank)
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage({
@@ -73,6 +102,12 @@ export default async function DashboardPage({
   const plinko     = metrics.plinko
   const ruleta     = metrics.ruleta
   const graduacion = metrics.graduacion
+  const competenciaTesla = metrics.competenciaTesla
+
+  // Top 10 por rol para la Competencia Tesla (idéntico para todos los del mismo rol)
+  const myRole   = plinko?.role ?? 'trainee'
+  const rankings = competenciaTesla ? await getComptesaRankings() : null
+  const compTop  = rankings?.[myRole] ?? []
 
   // Guard: old KV records may be missing new fields entirely
   if (!plinko || !graduacion) {
@@ -132,6 +167,23 @@ export default async function DashboardPage({
           unit="pts"
           progressIcon="🚢"
         />
+
+        {competenciaTesla && (
+          <GoalCard
+            title="COMPETENCIA TESLA"
+            current={Number(competenciaTesla.points.toFixed(1))}
+            target={1}
+            noBar
+            label="01 jul – 15 oct 2026"
+            sublabel={`${competenciaTesla.ventas} / ${COMPTESLA_MIN_VENTAS} ventas`}
+            bgImage="/fabrica_tesla.png"
+            bgPosition="center center"
+            bgSize="cover"
+            unit="pts"
+            progressIcon="⚡"
+            rules={competenciaTeslaRules()}
+          />
+        )}
 
         <GoalCard
           title="MONTHLY TOTAL SALES"
@@ -193,6 +245,68 @@ export default async function DashboardPage({
             )
           })()}
         </div>
+
+        {competenciaTesla && (
+          <div className="detail-card">
+            <h3>Competencia Tesla — Desglose</h3>
+            <dl>
+              <dt>Batería con solar</dt><dd>{competenciaTesla.bateriaConSolar} <span style={{ color: 'var(--gray)' }}>(×1)</span></dd>
+              <dt>Batería sola</dt><dd>{competenciaTesla.bateriaSola} <span style={{ color: 'var(--gray)' }}>(×0.5)</span></dd>
+              <dt>Asistidas Tesla</dt><dd>{competenciaTesla.asistida} <span style={{ color: 'var(--gray)' }}>(×0.5)</span></dd>
+              <dt>Total puntos</dt><dd className="highlight">{competenciaTesla.points.toFixed(1)} pts</dd>
+            </dl>
+
+            {/* Top 10 por rol */}
+            <div style={{ marginTop: '1rem', borderTop: '1px solid #edf0f8', paddingTop: '0.85rem' }}>
+              <div style={{
+                fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+                letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+                marginBottom: '0.6rem',
+              }}>
+                Top 10 — {myRole.charAt(0).toUpperCase() + myRole.slice(1)}
+              </div>
+
+              {myRole === 'trainee' ? (
+                <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.8rem', color: 'var(--gray)', margin: 0 }}>
+                  Los trainees no participan en el ranking de esta competencia.
+                </p>
+              ) : compTop.length === 0 ? (
+                <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.8rem', color: 'var(--gray)', margin: 0 }}>
+                  Ranking disponible al iniciar la competencia.
+                </p>
+              ) : (
+                <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {compTop.map((r, i) => {
+                    const isMe = r.zohoId === metrics.zohoId
+                    return (
+                      <li key={r.zohoId} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.6rem',
+                        padding: '0.4rem 0.55rem', borderRadius: 7,
+                        background: isMe ? 'rgba(245,166,35,0.14)' : i % 2 === 0 ? '#fafbff' : 'transparent',
+                        border: isMe ? '1px solid rgba(245,166,35,0.45)' : '1px solid transparent',
+                      }}>
+                        <span style={{
+                          width: '1.5rem', textAlign: 'center', flexShrink: 0,
+                          fontFamily: i < 3 ? 'inherit' : 'var(--font-bebas)',
+                          fontSize: i < 3 ? '1rem' : '0.85rem', color: 'var(--gray)',
+                        }}>{rankBadge(i + 1)}</span>
+                        <a href={`/p/${r.zohoId}`} style={{
+                          flex: 1, fontFamily: 'var(--font-body)', fontWeight: isMe ? 700 : 500,
+                          fontSize: '0.82rem', color: 'var(--navy)', textDecoration: 'none',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>{r.name}{isMe && ' (tú)'}</a>
+                        <span style={{
+                          flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                          fontSize: '0.82rem', color: 'var(--orange)',
+                        }}>{r.points.toFixed(1)} pts</span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Premiaciones */}

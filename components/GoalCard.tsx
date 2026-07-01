@@ -16,6 +16,7 @@ interface GoalCardProps {
   unit?:          string
   progressIcon?:  string
   rules?:         string
+  noBar?:         boolean
 }
 
 const DEFAULT_GRADIENT =
@@ -35,6 +36,7 @@ export default function GoalCard({
   unit = '',
   progressIcon,
   rules,
+  noBar = false,
 }: GoalCardProps) {
   const [showRules, setShowRules] = useState(false)
 
@@ -92,23 +94,32 @@ export default function GoalCard({
       {/* Arrow icon */}
       <div className="goal-arrow">↗</div>
 
-      {/* Progress bar with icon marker */}
-      <div className="goal-bar-wrapper">
-        {progressIcon && (
-          <div className="goal-progress-icon" style={{ left: `${iconPct}%` }}>
-            {progressIcon}
-          </div>
-        )}
-        <div className="goal-bar-track">
-          <div className="goal-bar-fill" style={{ width: `${pct * 100}%` }} />
+      {noBar ? (
+        /* Sin barra de progreso (ej. competencia por ranking) — solo pie con texto */
+        <div className="goal-bottom">
+          <span className="goal-bottom-value">{label}</span>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Progress bar with icon marker */}
+          <div className="goal-bar-wrapper">
+            {progressIcon && (
+              <div className="goal-progress-icon" style={{ left: `${iconPct}%` }}>
+                {progressIcon}
+              </div>
+            )}
+            <div className="goal-bar-track">
+              <div className="goal-bar-fill" style={{ width: `${pct * 100}%` }} />
+            </div>
+          </div>
 
-      {/* Bottom label */}
-      <div className="goal-bottom">
-        <span className="goal-bottom-label">META:</span>
-        <span className="goal-bottom-value">{label}</span>
-      </div>
+          {/* Bottom label */}
+          <div className="goal-bottom">
+            <span className="goal-bottom-label">META:</span>
+            <span className="goal-bottom-value">{label}</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
