@@ -225,27 +225,6 @@ export default async function DashboardPage({
           </dl>
         </div>
 
-        <div className="detail-card">
-          <h3>Meta Mensual</h3>
-          {(() => {
-            const bd: Record<string, number> = (monthly as any).breakdown ?? {}
-            return (
-              <dl>
-                <dt>Mes</dt><dd>{monthly.month}</dd>
-                <dt>Solar</dt>
-                <dd>{(bd['residential solar'] ?? 0) + (bd['commercial solar'] ?? 0)}</dd>
-                <dt>Roofing</dt>
-                <dd>{bd['roofing'] ?? 0}</dd>
-                <dt>PPS/Anker</dt>
-                <dd>{bd['pps'] ?? 0}</dd>
-                <dt>Agua</dt>
-                <dd>{bd['water products'] ?? 0}</dd>
-                <dt>Total</dt><dd className="highlight">{Number.isInteger(monthly.current) ? monthly.current : monthly.current.toFixed(1)} / {monthly.target}</dd>
-              </dl>
-            )
-          })()}
-        </div>
-
         {competenciaTesla && (
           <div className="detail-card">
             <h3>Competencia Tesla — Desglose</h3>
@@ -307,6 +286,27 @@ export default async function DashboardPage({
             </div>
           </div>
         )}
+
+        <div className="detail-card">
+          <h3>Meta Mensual</h3>
+          {(() => {
+            const bd: Record<string, number> = (monthly as any).breakdown ?? {}
+            return (
+              <dl>
+                <dt>Mes</dt><dd>{monthly.month}</dd>
+                <dt>Solar</dt>
+                <dd>{(bd['residential solar'] ?? 0) + (bd['commercial solar'] ?? 0)}</dd>
+                <dt>Roofing</dt>
+                <dd>{bd['roofing'] ?? 0}</dd>
+                <dt>PPS/Anker</dt>
+                <dd>{bd['pps'] ?? 0}</dd>
+                <dt>Agua</dt>
+                <dd>{bd['water products'] ?? 0}</dd>
+                <dt>Total</dt><dd className="highlight">{Number.isInteger(monthly.current) ? monthly.current : monthly.current.toFixed(1)} / {monthly.target}</dd>
+              </dl>
+            )
+          })()}
+        </div>
       </section>
 
       {/* Premiaciones */}
