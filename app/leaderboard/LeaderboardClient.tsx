@@ -141,12 +141,18 @@ export default function LeaderboardClient() {
             fontSize: '0.58rem', letterSpacing: '0.22em', textTransform: 'uppercase',
             padding: '0.22rem 0.7rem', borderRadius: 3,
           }}>EN ACCIÓN</span>
-          <a href="/search" style={{
-            marginLeft: 'auto',
-            fontFamily: 'var(--font-cond)', fontWeight: 700,
-            fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
-          }}>Buscar vendedor →</a>
+          <nav style={{ marginLeft: 'auto', display: 'flex', gap: '1.25rem' }}>
+            <a href="/leaderboard-tesla" style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 700,
+              fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+            }}>Competencia Tesla →</a>
+            <a href="/search" style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 700,
+              fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+            }}>Buscar vendedor →</a>
+          </nav>
         </header>
 
         {/* ── Hero copy ── */}
