@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
 import { setMetrics, setMembersList, setComptesaRankings, type ComptesaRankings } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL } from '@/lib/config'
 
 function currentYYYYMM() {
   const d = new Date()
@@ -72,6 +72,7 @@ async function runSync(month: string) {
       WHERE (inactive IS NULL OR inactive = '' OR LOWER(inactive) = 'false')
         AND member_id IS NOT NULL
         AND email IS NOT NULL
+        AND ${ALLOWED_ROLES_SQL}
     `)
 
     if (members.length === 0) {

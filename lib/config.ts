@@ -26,6 +26,26 @@ export const ACTIVE_DEAL_SQL =
   `dsr.stage <> 'Cancelled' ` +
   `AND (dsr.on_hold_status IS NULL OR TRIM(dsr.on_hold_status) = '')`
 
+// Únicos sales_role que se muestran en el dashboard (los 7 roles de venta válidos).
+// Excluye Trainee, Otro/Empleado, Canvassing Coordinator, Supervisor Regional,
+// Promotor y null. Aplica a las 3 queries de selección de miembros de
+// dw_zoho.dim_sales_team_member (leaderboard, leaderboard-tesla, sync).
+export const ALLOWED_SALES_ROLES = [
+  'Consultor',
+  'Empleado - Consultor',
+  'Empleado - Gerente',
+  'Empleado - Lider',
+  'Gerente',
+  'Gerente Accionista',
+  'Lider',
+]
+
+// Fragmento SQL para filtrar por rol permitido. La columna sales_role va sin alias
+// (las queries de miembros seleccionan de dim_sales_team_member sin alias).
+// Valores estáticos → interpolación segura.
+export const ALLOWED_ROLES_SQL =
+  `sales_role IN (${ALLOWED_SALES_ROLES.map(r => `'${r}'`).join(', ')})`
+
 // Pipeline field values from dwh.dim_profiles (lowercase)
 // Tesla: only solar + roofing count
 export const TESLA_PIPELINES = ['residential solar', 'commercial solar', 'roofing']

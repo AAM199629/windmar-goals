@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
   COMPTESLA_START, COMPTESLA_END, COMPTESLA_POINTS, COMPTESLA_MIN_VENTAS,
-  normalizeRole, ACTIVE_DEAL_SQL,
+  normalizeRole, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL,
 } from '@/lib/config'
 
 export type TeslaRole = 'consultor' | 'lider' | 'gerente'
@@ -56,6 +56,7 @@ const fetchTeslaLeaderboard = unstable_cache(
         WHERE (inactive IS NULL OR inactive = '' OR LOWER(inactive) = 'false')
           AND member_id IS NOT NULL
           AND email    IS NOT NULL
+          AND ${ALLOWED_ROLES_SQL}
       `),
 
       // ── 2. Batería Tesla propia: con solar (1 pt) / sola (0.5 pt) ───────────

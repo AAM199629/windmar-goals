@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
   CRUISE_START, CRUISE_END, CRUISE_TARGET,
-  ASISTIDA_POINTS, GRADUATION_POINTS, ACTIVE_DEAL_SQL,
+  ASISTIDA_POINTS, GRADUATION_POINTS, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL,
 } from '@/lib/config'
 
 export interface LeaderboardRow {
@@ -71,6 +71,7 @@ const fetchLeaderboard = unstable_cache(
         WHERE (inactive IS NULL OR inactive = '' OR LOWER(inactive) = 'false')
           AND member_id IS NOT NULL
           AND email    IS NOT NULL
+          AND ${ALLOWED_ROLES_SQL}
       `),
 
       // ── 2. Personal deals during cruise period by pipeline ─────────────────
