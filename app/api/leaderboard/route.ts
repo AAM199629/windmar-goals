@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
   CRUISE_START, CRUISE_END, CRUISE_TARGET,
-  ASISTIDA_POINTS, GRADUATION_POINTS,
+  ASISTIDA_POINTS, GRADUATION_POINTS, ACTIVE_DEAL_SQL,
 } from '@/lib/config'
 
 export interface LeaderboardRow {
@@ -88,7 +88,7 @@ const fetchLeaderboard = unstable_cache(
         WHERE fd.closing_date >= $1
           AND fd.closing_date <= $2
           AND fd.closing_date IS NOT NULL
-          AND dsr.stage <> 'Cancelled'
+          AND ${ACTIVE_DEAL_SQL}
           AND stm.member_id IS NOT NULL
         GROUP BY stm.member_id, LOWER(dp.pipeline)
       `, [CRUISE_START, CRUISE_END]),
@@ -108,7 +108,7 @@ const fetchLeaderboard = unstable_cache(
         WHERE fd.closing_date >= $1
           AND fd.closing_date <= $2
           AND fd.closing_date IS NOT NULL
-          AND dsr.stage <> 'Cancelled'
+          AND ${ACTIVE_DEAL_SQL}
           AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
           AND stm_mentor.member_id IS NOT NULL
         GROUP BY stm_mentor.member_id

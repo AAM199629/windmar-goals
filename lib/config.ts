@@ -18,6 +18,14 @@ export const TESLA_END   = process.env.TESLA_END_DATE   ?? _tesla.end
 export const CRUISE_START = process.env.CRUISE_START_DATE ?? '2026-01-01'
 export const CRUISE_END   = process.env.CRUISE_END_DATE   ?? '2026-12-31'
 
+// Deals excluidos de TODA métrica de competencia: cancelados + en hold.
+// on_hold_status vive en dwh.dim_status_reason (alias `dsr` en todas las queries);
+// es NULL para deals activos y cualquier valor no-nulo es un estado "On Hold - ...".
+// Constante estática (no input de usuario) → interpolarla en SQL es seguro.
+export const ACTIVE_DEAL_SQL =
+  `dsr.stage <> 'Cancelled' ` +
+  `AND (dsr.on_hold_status IS NULL OR TRIM(dsr.on_hold_status) = '')`
+
 // Pipeline field values from dwh.dim_profiles (lowercase)
 // Tesla: only solar + roofing count
 export const TESLA_PIPELINES = ['residential solar', 'commercial solar', 'roofing']

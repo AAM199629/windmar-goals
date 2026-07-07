@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
 import { setMetrics, setMembersList, setComptesaRankings, type ComptesaRankings } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL } from '@/lib/config'
 
 function currentYYYYMM() {
   const d = new Date()
@@ -93,7 +93,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
       GROUP BY stm.member_id, LOWER(dp.pipeline)
     `, [TESLA_START, TESLA_END])
@@ -122,7 +122,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
       GROUP BY team_map.upline_id, LOWER(dp.pipeline)
     `, [TESLA_START, TESLA_END])
@@ -142,7 +142,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
       GROUP BY stm.member_id, LOWER(dp.pipeline)
     `, [CRUISE_START, CRUISE_END])
@@ -162,7 +162,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
         AND stm_mentor.member_id IS NOT NULL
       GROUP BY stm_mentor.member_id
@@ -181,7 +181,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
       GROUP BY stm.member_id
     `, [first, last])
@@ -201,7 +201,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
       GROUP BY stm.member_id, LOWER(dp.pipeline)
     `, [monday, sunday])
@@ -221,7 +221,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
       GROUP BY stm.member_id, LOWER(dp.pipeline)
     `, [first, last])
@@ -244,7 +244,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id IS NOT NULL
         AND COALESCE(fd.battery_qty, 0) > 0
         AND LOWER(fd.battery_type) LIKE '%tesla%'
@@ -266,7 +266,7 @@ async function runSync(month: string) {
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
-        AND dsr.stage <> 'Cancelled'
+        AND ${ACTIVE_DEAL_SQL}
         AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
         AND COALESCE(fd.battery_qty, 0) > 0
         AND LOWER(fd.battery_type) LIKE '%tesla%'

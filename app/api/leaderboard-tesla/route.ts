@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
   COMPTESLA_START, COMPTESLA_END, COMPTESLA_POINTS, COMPTESLA_MIN_VENTAS,
-  normalizeRole,
+  normalizeRole, ACTIVE_DEAL_SQL,
 } from '@/lib/config'
 
 export type TeslaRole = 'consultor' | 'lider' | 'gerente'
@@ -76,7 +76,7 @@ const fetchTeslaLeaderboard = unstable_cache(
         WHERE fd.closing_date >= $1
           AND fd.closing_date <= $2
           AND fd.closing_date IS NOT NULL
-          AND dsr.stage <> 'Cancelled'
+          AND ${ACTIVE_DEAL_SQL}
           AND stm.member_id IS NOT NULL
           AND COALESCE(fd.battery_qty, 0) > 0
           AND LOWER(fd.battery_type) LIKE '%tesla%'
@@ -98,7 +98,7 @@ const fetchTeslaLeaderboard = unstable_cache(
         WHERE fd.closing_date >= $1
           AND fd.closing_date <= $2
           AND fd.closing_date IS NOT NULL
-          AND dsr.stage <> 'Cancelled'
+          AND ${ACTIVE_DEAL_SQL}
           AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
           AND COALESCE(fd.battery_qty, 0) > 0
           AND LOWER(fd.battery_type) LIKE '%tesla%'
