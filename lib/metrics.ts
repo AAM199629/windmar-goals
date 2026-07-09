@@ -17,6 +17,14 @@ import {
   COMPTESLA_POINTS,
   COMPTESLA_START,
   COMPTESLA_END,
+  GERENTEA_START,
+  GERENTEA_END,
+  GERENTEA_PRIMARY,
+  GERENTEA_DEV_POINTS,
+  GERENTEA_DEV_TARGET,
+  GERENTEA_SALES_POINTS,
+  GERENTEA_ASISTIDA_POINTS,
+  GERENTEA_SALES_TARGET,
 } from './config'
 
 const TEAM_BUILDER_TARGET = 10
@@ -95,6 +103,27 @@ export interface CompetenciaTeslaMetrics {
   end:             string
 }
 
+export interface GerenteAccionistaMetrics {
+  primary: {
+    gerentes:       number
+    lideres:        number
+    consultores:    number
+    target:         { gerentes: number; lideres: number; consultores: number }
+    metasCumplidas: number   // 0–3 (cuántas de las 3 cuotas cumplidas) → número grande / barra
+    done:           boolean   // 2·4·6 completo
+  }
+  dev: { points: number; target: number; done: boolean }
+  sales: {
+    points:    number
+    target:    number
+    done:      boolean
+    breakdown: { solar: number; roofing: number; water: number; pps: number; asistida: number }
+  }
+  secondaryDone: boolean      // dev.done && sales.done
+  start: string
+  end:   string
+}
+
 export interface GoalsMetrics {
   zohoId:  string
   name:    string
@@ -123,6 +152,7 @@ export interface GoalsMetrics {
   graduacion:  GraduacionMetrics
   teamBuilder: TeamBuilderMetrics | null
   competenciaTesla: CompetenciaTeslaMetrics | null
+  gerenteAccionista: GerenteAccionistaMetrics | null
   updatedAt:   string
 }
 
@@ -281,6 +311,55 @@ export function buildMetrics(params: {
     end:   COMPTESLA_END,
   }
 
+  // ── Gerente Accionista (solo gerentes: Gerente / Empleado - Gerente / Gerente Accionista) ──
+  let gerenteAccionista: GerenteAccionistaMetrics | null = null
+  if (role === 'gerente') {
+    let gerentes = 0; let lideres = 0; let consultores = 0; let devPoints = 0
+    for (const dm of directLineMembers) {
+      if (dateInRange(dm.gerente_start_date, GERENTEA_START, GERENTEA_END)) {
+        gerentes++; devPoints += GERENTEA_DEV_POINTS.gerente
+      }
+      if (dateInRange(dm.lider_start_date, GERENTEA_START, GERENTEA_END)) {
+        lideres++; devPoints += GERENTEA_DEV_POINTS.lider
+      }
+      if (dateInRange(dm.consultor_start_date, GERENTEA_START, GERENTEA_END)) {
+        consultores++; devPoints += GERENTEA_DEV_POINTS.consultor
+      }
+    }
+
+    const salesBreakdown = {
+      solar:    ((cruiseCounts['residential solar'] ?? 0) + (cruiseCounts['commercial solar'] ?? 0)) * GERENTEA_SALES_POINTS['residential solar'],
+      roofing:  (cruiseCounts['roofing']        ?? 0) * GERENTEA_SALES_POINTS['roofing'],
+      water:    (cruiseCounts['water products'] ?? 0) * GERENTEA_SALES_POINTS['water products'],
+      pps:      (cruiseCounts['pps']            ?? 0) * GERENTEA_SALES_POINTS['pps'],
+      asistida: asistidaCount * GERENTEA_ASISTIDA_POINTS,
+    }
+    const salesPoints = salesBreakdown.solar + salesBreakdown.roofing
+      + salesBreakdown.water + salesBreakdown.pps + salesBreakdown.asistida
+
+    const metasCumplidas =
+      (gerentes    >= GERENTEA_PRIMARY.gerentes    ? 1 : 0) +
+      (lideres     >= GERENTEA_PRIMARY.lideres     ? 1 : 0) +
+      (consultores >= GERENTEA_PRIMARY.consultores ? 1 : 0)
+    const primaryDone = metasCumplidas === 3
+    const devDone     = devPoints  >= GERENTEA_DEV_TARGET
+    const salesDone   = salesPoints >= GERENTEA_SALES_TARGET
+
+    gerenteAccionista = {
+      primary: {
+        gerentes, lideres, consultores,
+        target:         { ...GERENTEA_PRIMARY },
+        metasCumplidas,
+        done:           primaryDone,
+      },
+      dev:   { points: devPoints, target: GERENTEA_DEV_TARGET, done: devDone },
+      sales: { points: salesPoints, target: GERENTEA_SALES_TARGET, done: salesDone, breakdown: salesBreakdown },
+      secondaryDone: devDone && salesDone,
+      start: GERENTEA_START,
+      end:   GERENTEA_END,
+    }
+  }
+
   // PPS/Anker = 0.5 per sale; all other pipelines = 1
   const weightedMonthly = Object.entries(monthlyPipelines).reduce(
     (acc, [p, cnt]) => acc + cnt * (p === 'pps' ? 0.5 : 1),
@@ -315,6 +394,7 @@ export function buildMetrics(params: {
     graduacion,
     teamBuilder,
     competenciaTesla,
+    gerenteAccionista,
     updatedAt: new Date().toISOString(),
   }
 }

@@ -1,6 +1,6 @@
 import GoalCard from '@/components/GoalCard'
-import { getMetrics, getComptesaRankings } from '@/lib/kv'
-import { GRAD_POINTS, COMPTESLA_MIN_VENTAS } from '@/lib/config'
+import { getMetrics, getComptesaRankings, getGerenteAccionistaRankings } from '@/lib/kv'
+import { GRAD_POINTS, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET } from '@/lib/config'
 
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
 
@@ -66,6 +66,34 @@ Requisitos:
     (si un mes queda en cero → descalificado)`
 }
 
+function gerenteAccionistaRules(): string {
+  return `AÑO 2026 · máximo 2 ganadores
+(promociones ≤ 31 dic 2026)
+
+FORMATO PRIMARIO (2·4·6)
+Graduar en tu línea directa:
+  • ${GERENTEA_PRIMARY.gerentes} gerentes
+  • ${GERENTEA_PRIMARY.lideres} líderes
+  • ${GERENTEA_PRIMARY.consultores} consultores
+
+FORMATO SECUNDARIO
+  • ${GERENTEA_DEV_TARGET}+ pts de desarrollo, Y
+  • ${GERENTEA_SALES_TARGET}+ ventas personales (ponderadas)
+
+Pts de desarrollo (por promoción 1ª línea):
+  • Gerente: 5 · Líder: 2 · Consultor: 0.5
+
+Pts por venta personal:
+  • Solar/Roofing: 1 · Water/Anker: 0.5
+  • Venta asistida: 1
+    (1ª–4ª venta de un trainee)
+
+SELECCIÓN
+Solo 2 personas. El Primario tiene prioridad
+sobre el Secundario. Solo cuentan promociones
+de 1ª línea; transferidos no aplican.`
+}
+
 function rankBadge(rank: number): string {
   if (rank === 1) return '🥇'
   if (rank === 2) return '🥈'
@@ -103,11 +131,15 @@ export default async function DashboardPage({
   const ruleta     = metrics.ruleta
   const graduacion = metrics.graduacion
   const competenciaTesla = metrics.competenciaTesla
+  const gerenteAccionista = metrics.gerenteAccionista
 
   // Top 10 por rol para la Competencia Tesla (idéntico para todos los del mismo rol)
   const myRole   = plinko?.role ?? 'trainee'
   const rankings = competenciaTesla ? await getComptesaRankings() : null
   const compTop  = rankings?.[myRole] ?? []
+
+  // Ranking de gerentes para la tarjeta Gerente Accionista
+  const gaRanking = gerenteAccionista ? (await getGerenteAccionistaRankings() ?? []) : []
 
   // Guard: old KV records may be missing new fields entirely
   if (!plinko || !graduacion) {
@@ -182,6 +214,19 @@ export default async function DashboardPage({
             unit="pts"
             progressIcon="⚡"
             rules={competenciaTeslaRules()}
+          />
+        )}
+
+        {gerenteAccionista && (
+          <GoalCard
+            title="GERENTE ACCIONISTA"
+            current={gerenteAccionista.primary.metasCumplidas}
+            target={3}
+            label="Formato Primario 2·4·6"
+            sublabel={`Ger ${gerenteAccionista.primary.gerentes}/${gerenteAccionista.primary.target.gerentes} · Líd ${gerenteAccionista.primary.lideres}/${gerenteAccionista.primary.target.lideres} · Cons ${gerenteAccionista.primary.consultores}/${gerenteAccionista.primary.target.consultores}`}
+            gradient="linear-gradient(155deg, #1a1408 0%, #3a2c10 45%, #8a6a1e 100%)"
+            progressIcon="👔"
+            rules={gerenteAccionistaRules()}
           />
         )}
 
@@ -278,6 +323,91 @@ export default async function DashboardPage({
                           flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
                           fontSize: '0.82rem', color: 'var(--orange)',
                         }}>{r.points.toFixed(1)} pts</span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              )}
+            </div>
+          </div>
+        )}
+
+        {gerenteAccionista && (
+          <div className="detail-card">
+            <h3>Gerente Accionista — Desglose</h3>
+
+            {/* Formato Primario 2·4·6 */}
+            <div style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+              letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+              marginBottom: '0.5rem',
+            }}>
+              Formato Primario {gerenteAccionista.primary.done ? '✓' : ''}
+            </div>
+            <dl>
+              <dt>Gerentes graduados</dt><dd>{gerenteAccionista.primary.gerentes} / {gerenteAccionista.primary.target.gerentes}</dd>
+              <dt>Líderes graduados</dt><dd>{gerenteAccionista.primary.lideres} / {gerenteAccionista.primary.target.lideres}</dd>
+              <dt>Consultores graduados</dt><dd>{gerenteAccionista.primary.consultores} / {gerenteAccionista.primary.target.consultores}</dd>
+              <dt>Metas cumplidas</dt><dd className="highlight">{gerenteAccionista.primary.metasCumplidas} / 3</dd>
+            </dl>
+
+            {/* Formato Secundario */}
+            <div style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+              letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+              margin: '0.9rem 0 0.5rem',
+            }}>
+              Formato Secundario {gerenteAccionista.secondaryDone ? '✓' : ''}
+            </div>
+            <dl>
+              <dt>Pts de desarrollo</dt><dd>{gerenteAccionista.dev.points.toFixed(1)} / {gerenteAccionista.dev.target}</dd>
+              <dt>Solar</dt><dd>{gerenteAccionista.sales.breakdown.solar.toFixed(1)}</dd>
+              <dt>Roofing</dt><dd>{gerenteAccionista.sales.breakdown.roofing.toFixed(1)}</dd>
+              <dt>Anker (PPS)</dt><dd>{gerenteAccionista.sales.breakdown.pps.toFixed(1)}</dd>
+              <dt>Agua</dt><dd>{gerenteAccionista.sales.breakdown.water.toFixed(1)}</dd>
+              <dt>Asistidas</dt><dd>{gerenteAccionista.sales.breakdown.asistida.toFixed(1)}</dd>
+              <dt>Ventas personales</dt><dd className="highlight">{gerenteAccionista.sales.points.toFixed(1)} / {gerenteAccionista.sales.target}</dd>
+            </dl>
+
+            {/* Ranking de gerentes */}
+            <div style={{ marginTop: '1rem', borderTop: '1px solid #edf0f8', paddingTop: '0.85rem' }}>
+              <div style={{
+                fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+                letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+                marginBottom: '0.6rem',
+              }}>
+                Ranking Gerentes — pts de desarrollo
+              </div>
+
+              {gaRanking.length === 0 ? (
+                <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.8rem', color: 'var(--gray)', margin: 0 }}>
+                  Ranking disponible tras el próximo sync.
+                </p>
+              ) : (
+                <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {gaRanking.map((r, i) => {
+                    const isMe = r.zohoId === metrics.zohoId
+                    return (
+                      <li key={r.zohoId} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.6rem',
+                        padding: '0.4rem 0.55rem', borderRadius: 7,
+                        background: isMe ? 'rgba(245,166,35,0.14)' : i % 2 === 0 ? '#fafbff' : 'transparent',
+                        border: isMe ? '1px solid rgba(245,166,35,0.45)' : '1px solid transparent',
+                      }}>
+                        <span style={{
+                          width: '1.5rem', textAlign: 'center', flexShrink: 0,
+                          fontFamily: i < 3 ? 'inherit' : 'var(--font-bebas)',
+                          fontSize: i < 3 ? '1rem' : '0.85rem', color: 'var(--gray)',
+                        }}>{rankBadge(i + 1)}</span>
+                        <a href={`/p/${r.zohoId}`} style={{
+                          flex: 1, fontFamily: 'var(--font-body)', fontWeight: isMe ? 700 : 500,
+                          fontSize: '0.82rem', color: 'var(--navy)', textDecoration: 'none',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>{r.name}{isMe && ' (tú)'}</a>
+                        <span style={{
+                          flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                          fontSize: '0.82rem', color: 'var(--orange)',
+                        }}>{r.primaryDone ? 'Primario ✓' : `${r.devPoints.toFixed(1)} pts`}</span>
                       </li>
                     )
                   })}

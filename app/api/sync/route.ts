@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics, setMembersList, setComptesaRankings, type ComptesaRankings } from '@/lib/kv'
+import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, type ComptesaRankings, type GerenteAccionistaRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
 import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL } from '@/lib/config'
 
@@ -322,6 +322,7 @@ async function runSync(month: string) {
     // ── 10. Build and persist metrics for each member ─────────────────────────
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
     const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number }> = []
+    const gerentea: GerenteAccionistaRankEntry[] = []
 
     await Promise.all(
       members.map(async (member) => {
@@ -354,6 +355,19 @@ async function runSync(month: string) {
               ventas: metrics.competenciaTesla.ventas,
             })
           }
+          if (metrics.gerenteAccionista) {
+            const ga = metrics.gerenteAccionista
+            gerentea.push({
+              zohoId:      member.member_id,
+              name:        member.full_name,
+              gerentes:    ga.primary.gerentes,
+              lideres:     ga.primary.lideres,
+              consultores: ga.primary.consultores,
+              devPoints:   ga.dev.points,
+              salesPoints: ga.sales.points,
+              primaryDone: ga.primary.done,
+            })
+          }
           results.push({ zohoId: member.member_id, name: member.full_name, ok: true })
         } catch (e) {
           results.push({ zohoId: member.member_id, name: member.full_name, ok: false, error: String(e) })
@@ -371,6 +385,10 @@ async function runSync(month: string) {
         .map(({ zohoId, name, points, ventas }) => ({ zohoId, name, points, ventas }))
     }
     await setComptesaRankings(rankings)
+
+    // ── 10c. Gerente Accionista: ranking de gerentes (orden por pts de desarrollo) ─
+    gerentea.sort((a, b) => b.devPoints - a.devPoints || b.salesPoints - a.salesPoints)
+    await setGerenteAccionistaRankings(gerentea)
 
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length

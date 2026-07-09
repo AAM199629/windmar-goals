@@ -132,3 +132,21 @@ export const COMPTESLA_POINTS = {
   asistida:        0.5,   // primeras 4 ventas de un trainee, solo productos con Tesla
 }
 export const COMPTESLA_MIN_VENTAS = 10  // requisito mínimo para clasificar
+
+// ── Gerente Accionista (año 2026; promociones ≤ 31 dic 2026) ───────────────────
+// Tarjeta solo para gerentes (Gerente, Empleado - Gerente, Gerente Accionista).
+export const GERENTEA_START = process.env.GERENTEA_START_DATE ?? '2026-01-01'
+export const GERENTEA_END   = process.env.GERENTEA_END_DATE   ?? '2026-12-31'
+
+// Formato Primario 2·4·6 (graduaciones de primera línea durante el periodo)
+export const GERENTEA_PRIMARY = { gerentes: 2, lideres: 4, consultores: 6 }
+
+// Formato Secundario: puntos de desarrollo ≥ 11 Y ventas personales ponderadas ≥ 40
+export const GERENTEA_DEV_POINTS = { gerente: 5, lider: 2, consultor: 0.5 } // por promoción de 1ª línea
+export const GERENTEA_DEV_TARGET = 11
+export const GERENTEA_SALES_POINTS: Record<string, number> = {
+  'residential solar': 1, 'commercial solar': 1, 'roofing': 1,
+  'water products': 0.5, 'pps': 0.5,
+}
+export const GERENTEA_ASISTIDA_POINTS = 1  // venta asistida (1ª–4ª venta del trainee → mentor)
+export const GERENTEA_SALES_TARGET    = 40
