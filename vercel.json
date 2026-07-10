@@ -8,6 +8,7 @@
   "functions": {
     "app/api/leaderboard/route.ts":       { "maxDuration": 120 },
     "app/api/leaderboard-tesla/route.ts": { "maxDuration": 120 },
+    "app/api/plinko-ruleta/route.ts":     { "maxDuration": 120 },
     "app/api/sync/route.ts":              { "maxDuration": 300 }
   }
 }
