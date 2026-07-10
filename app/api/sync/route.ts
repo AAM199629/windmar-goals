@@ -386,9 +386,9 @@ async function runSync(month: string) {
     }
     await setComptesaRankings(rankings)
 
-    // ── 10c. Gerente Accionista: ranking de gerentes (orden por pts de desarrollo) ─
+    // ── 10c. Gerente Accionista: top 10 gerentes (orden por pts de desarrollo) ─
     gerentea.sort((a, b) => b.devPoints - a.devPoints || b.salesPoints - a.salesPoints)
-    await setGerenteAccionistaRankings(gerentea)
+    await setGerenteAccionistaRankings(gerentea.slice(0, 10))
 
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length

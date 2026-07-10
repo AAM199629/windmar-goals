@@ -376,7 +376,7 @@ export default async function DashboardPage({
                 letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
                 marginBottom: '0.6rem',
               }}>
-                Ranking Gerentes — pts de desarrollo
+                Top 10 Gerentes — pts de desarrollo
               </div>
 
               {gaRanking.length === 0 ? (
