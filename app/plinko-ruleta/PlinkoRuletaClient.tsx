@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { PlinkoRuletaResponse, PrizeRow, PrizeRole } from '@/app/api/plinko-ruleta/route'
+import type { DealDetail } from '@/app/api/plinko-ruleta/deals/route'
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 const numTd: React.CSSProperties = {
@@ -33,6 +34,15 @@ function monthLabel(yyyymm: string) {
   const [y, m] = yyyymm.split('-')
   return `${MESES_LARGO[Number(m) - 1]} ${y}`
 }
+function monthLastDay(yyyymm: string) {
+  const [y, m] = yyyymm.split('-')
+  const d = new Date(Number(y), Number(m), 0).getDate()
+  return `${yyyymm}-${String(d).padStart(2, '0')}`
+}
+function fmtMoney(n: number | null) {
+  if (n == null) return '—'
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
 
 // Lista de meses: ene-2026 → mes actual
 function availableMonths(): string[] {
@@ -57,6 +67,9 @@ export default function PlinkoRuletaClient() {
   const [data, setData]           = useState<PlinkoRuletaResponse | null>(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
+  const [detailRow, setDetailRow]     = useState<PrizeRow | null>(null)
+  const [detailDeals, setDetailDeals] = useState<DealDetail[] | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     setLoading(true); setError(null)
@@ -83,6 +96,20 @@ export default function PlinkoRuletaClient() {
   const roleRows = periodRows.filter(r => r.role === activeRole)
   const fcRows   = roleRows.filter(r => !r.isEmpleado)
   const empRows  = roleRows.filter(r => r.isEmpleado)
+
+  // Rango del periodo activo (Ruleta = mes · Plinko = semana seleccionada)
+  const periodStart = mode === 'ruleta' ? `${month}-01`          : (weeks[wIdx]?.weekStart ?? `${month}-01`)
+  const periodEnd   = mode === 'ruleta' ? monthLastDay(month)    : (weeks[wIdx]?.weekEnd   ?? monthLastDay(month))
+  const periodLabel = mode === 'ruleta' ? monthLabel(month)      : (weeks[wIdx] ? `Semana ${wIdx + 1} (${fmtDay(weeks[wIdx].weekStart)}–${fmtDay(weeks[wIdx].weekEnd)})` : '')
+
+  function openDetail(row: PrizeRow) {
+    setDetailRow(row); setDetailDeals(null); setDetailLoading(true)
+    fetch(`/api/plinko-ruleta/deals?zohoId=${row.zohoId}&start=${periodStart}&end=${periodEnd}`)
+      .then(r => r.json())
+      .then((d: { deals?: DealDetail[] }) => setDetailDeals(d.deals ?? []))
+      .catch(() => setDetailDeals([]))
+      .finally(() => setDetailLoading(false))
+  }
 
   // Metas por rol para la leyenda del modo activo
   const metaFor = (role: PrizeRole): number => {
@@ -206,8 +233,8 @@ export default function PlinkoRuletaClient() {
 
       {/* ═══════════════ TABLAS FC / EMPLEADOS ═══════════════ */}
       <div style={{ padding: '1rem 1.5rem 0', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <PrizeTable title="Full Commission" rows={fcRows} accent={accent} loading={loading} />
-        <PrizeTable title="Empleados"       rows={empRows} accent={accent} loading={loading} />
+        <PrizeTable title="Full Commission" rows={fcRows} accent={accent} loading={loading} onOpen={openDetail} />
+        <PrizeTable title="Empleados"       rows={empRows} accent={accent} loading={loading} onOpen={openDetail} />
       </div>
 
       {error && (
@@ -233,12 +260,85 @@ export default function PlinkoRuletaClient() {
           Datos de Redshift · Actualizado: {new Date(data.computedAt).toLocaleString('es-PR', { timeZone: 'America/Puerto_Rico' })}
         </footer>
       )}
+
+      {/* ═══════════════ MODAL DE DESGLOSE ═══════════════ */}
+      {detailRow && (
+        <DealsModal
+          row={detailRow}
+          periodLabel={periodLabel}
+          deals={detailDeals}
+          loading={detailLoading}
+          onClose={() => setDetailRow(null)}
+        />
+      )}
     </main>
   )
 }
 
+// ── Modal con el desglose de las ventas que componen el conteo ──────────────────
+function DealsModal({ row, periodLabel, deals, loading, onClose }: {
+  row: PrizeRow; periodLabel: string; deals: DealDetail[] | null; loading: boolean; onClose: () => void
+}) {
+  const th: React.CSSProperties = { padding: '0.55rem 0.7rem', textAlign: 'left', fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)', background: 'var(--navy)', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { padding: '0.55rem 0.7rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--navy)', borderBottom: '1px solid #edf0f8', whiteSpace: 'nowrap' }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(13,22,84,0.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 860, width: '100%', maxHeight: '85vh', overflow: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+        {/* Header */}
+        <div style={{ padding: '1.1rem 1.4rem', borderBottom: '1px solid #e2e8f4', display: 'flex', alignItems: 'flex-start', gap: '1rem', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-bebas)', fontSize: '1.5rem', color: 'var(--navy)', letterSpacing: '0.03em', lineHeight: 1.1 }}>{row.name}</div>
+            <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gray)', marginTop: 2 }}>
+              {periodLabel} · {row.ventas} venta{row.ventas === 1 ? '' : 's'} elegible{row.ventas === 1 ? '' : 's'} (meta {row.meta})
+            </div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft: 'auto', border: 'none', background: '#eef1f9', color: 'var(--navy)', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, flexShrink: 0 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '0.5rem 0.4rem 1rem' }}>
+          {loading ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--gray)', fontFamily: 'var(--font-cond)' }}>Cargando desglose…</div>
+          ) : !deals || deals.length === 0 ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--gray)', fontFamily: 'var(--font-cond)' }}>Sin ventas elegibles en este periodo.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
+                <thead>
+                  <tr>
+                    {['Closing date', 'Pipeline', 'Amount', 'Sales rep', 'All Sales Docs Rec.', 'On hold Status'].map(h => (
+                      <th key={h} style={th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {deals.map((d, i) => (
+                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafbff' }}>
+                      <td style={td}>{d.closingDate ?? '—'}</td>
+                      <td style={{ ...td, textTransform: 'capitalize' }}>{d.pipeline ?? '—'}</td>
+                      <td style={{ ...td, fontWeight: 600 }}>{fmtMoney(d.amount)}</td>
+                      <td style={td}>{d.salesRep ?? '—'}</td>
+                      <td style={{ ...td, color: '#aab4cc' }}>{d.allSalesDocs ?? 'n/d'}</td>
+                      <td style={td}>{d.onHoldStatus
+                        ? <span style={{ background: 'rgba(232,33,39,0.12)', color: '#c62828', fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.66rem', padding: '0.12rem 0.5rem', borderRadius: 999 }}>{d.onHoldStatus}</span>
+                        : <span style={{ color: '#9fb0c9' }}>—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.68rem', color: '#aab4cc', letterSpacing: '0.03em', padding: '0.75rem 0.7rem 0' }}>
+                “All Sales Docs Received” aún no está disponible en el warehouse (n/d). Se muestran las ventas activas elegibles (Solar + Roofing) del periodo.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Tabla de premios (una por segmento FC / Empleados) ──────────────────────────
-function PrizeTable({ title, rows, accent, loading }: { title: string; rows: PrizeRow[]; accent: string; loading: boolean }) {
+function PrizeTable({ title, rows, accent, loading, onOpen }: { title: string; rows: PrizeRow[]; accent: string; loading: boolean; onOpen: (row: PrizeRow) => void }) {
   return (
     <div style={{ flex: '1 1 340px', minWidth: 300 }}>
       <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--navy)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -274,8 +374,19 @@ function PrizeTable({ title, rows, accent, loading }: { title: string; rows: Pri
                   <td style={{ padding: '0.7rem 0.5rem 0.7rem 1rem' }}>
                     <a href={`/p/${m.zohoId}`} style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--navy)', textDecoration: 'none' }}>{m.name}</a>
                   </td>
-                  <td style={{ ...numTd, fontWeight: m.clasificado ? 800 : 600, color: m.clasificado ? accent : 'var(--navy)' }}>
-                    {m.ventas}<span style={{ fontSize: '0.62rem', color: '#aab4cc', marginLeft: 2 }}>/{m.meta}</span>
+                  <td style={{ ...numTd, padding: 0 }}>
+                    <button
+                      onClick={() => onOpen(m)}
+                      title="Ver desglose de ventas"
+                      style={{
+                        width: '100%', height: '100%', padding: '0.7rem 0.5rem', border: 'none', background: 'transparent',
+                        cursor: 'pointer', fontFamily: 'var(--font-cond)', letterSpacing: '0.02em',
+                        fontWeight: m.clasificado ? 800 : 600, fontSize: '0.9rem',
+                        color: m.clasificado ? accent : 'var(--blue)', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#c7d2ea',
+                      }}
+                    >
+                      {m.ventas}<span style={{ fontSize: '0.62rem', color: '#aab4cc', marginLeft: 2, textDecoration: 'none' }}>/{m.meta}</span>
+                    </button>
                   </td>
                   <td style={{ padding: '0.7rem 0.5rem', textAlign: 'center' }}>
                     {m.clasificado
