@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
-  PREMIO_PIPELINES, plinkoTarget, ruletaTarget, normalizeRole,
+  PREMIO_PIPELINES, PLINKO_PIPELINES, PLINKO_POINTS,
+  plinkoTarget, ruletaTarget, normalizeRole,
   ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL,
 } from '@/lib/config'
 
@@ -39,8 +40,16 @@ interface MemberRow {
 interface MonthlyRow { member_id: string; cnt: string | number }
 interface WeeklyRow  { member_id: string; week_start: string; cnt: string | number }
 
-// PREMIO_PIPELINES son constantes estáticas → interpolación segura en SQL.
-const PREMIO_IN = PREMIO_PIPELINES.map(p => `'${p}'`).join(', ')
+// PREMIO_PIPELINES / PLINKO_* son constantes estáticas → interpolación segura en SQL.
+const PREMIO_IN = PREMIO_PIPELINES.map(p => `'${p}'`).join(', ')   // Ruleta: Solar + Roofing
+const PLINKO_IN = PLINKO_PIPELINES.map(p => `'${p}'`).join(', ')   // Plinko: + Anker + Water
+// Suma ponderada de ventas para Plinko: Solar + Roofing = 1 pto, Anker + Water = ½ pto.
+const PLINKO_WEIGHT_SQL =
+  'SUM(CASE ' +
+  Object.entries(PLINKO_POINTS)
+    .map(([p, w]) => `WHEN LOWER(dp.pipeline) = '${p}' THEN ${w}`)
+    .join(' ') +
+  ' ELSE 0 END)'
 
 // ── Date helpers (UTC-safe, sobre strings YYYY-MM-DD) ──────────────────────────
 function currentYYYYMM(): string {
@@ -122,7 +131,7 @@ function buildFetcher(month: string) {
           SELECT
             stm.member_id,
             TO_CHAR(DATE_TRUNC('week', fd.closing_date), 'YYYY-MM-DD') AS week_start,
-            COUNT(*) AS cnt
+            ${PLINKO_WEIGHT_SQL} AS cnt
           FROM dwh.fact_deals fd
           JOIN dwh.dim_profiles dp
             ON dp.id_profile = fd.id_profile
@@ -137,7 +146,7 @@ function buildFetcher(month: string) {
             AND fd.closing_date IS NOT NULL
             AND ${ACTIVE_DEAL_SQL}
             AND stm.member_id IS NOT NULL
-            AND LOWER(dp.pipeline) IN (${PREMIO_IN})
+            AND LOWER(dp.pipeline) IN (${PLINKO_IN})
           GROUP BY stm.member_id, TO_CHAR(DATE_TRUNC('week', fd.closing_date), 'YYYY-MM-DD')
         `, [rangeStart, rangeEnd]),
 

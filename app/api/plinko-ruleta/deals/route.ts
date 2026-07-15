@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { PREMIO_PIPELINES, ACTIVE_DEAL_SQL } from '@/lib/config'
+import { PREMIO_PIPELINES, PLINKO_PIPELINES, ACTIVE_DEAL_SQL } from '@/lib/config'
 
-// Desglose de las ventas elegibles (Solar + Roofing, activas) que componen el
-// conteo de un vendedor en un periodo dado (mes para Ruleta, semana para Plinko).
+// Desglose de las ventas elegibles y activas que componen el conteo de un
+// vendedor en un periodo dado. Ruleta (mes) = Solar + Roofing; Plinko (semana)
+// = Solar + Roofing + Anker + Water (estos últimos a ½ pto).
 export interface DealDetail {
   closingDate:      string | null
   pipeline:         string | null
@@ -27,6 +28,7 @@ interface DealRow {
 }
 
 const PREMIO_IN = PREMIO_PIPELINES.map(p => `'${p}'`).join(', ')
+const PLINKO_IN = PLINKO_PIPELINES.map(p => `'${p}'`).join(', ')
 
 export async function GET(req: Request) {
   try {
@@ -34,10 +36,14 @@ export async function GET(req: Request) {
     const zohoId = (url.searchParams.get('zohoId') ?? '').trim()
     const start  = (url.searchParams.get('start') ?? '').trim()
     const end    = (url.searchParams.get('end') ?? '').trim()
+    const mode   = (url.searchParams.get('mode') ?? '').trim()
 
     if (!/^\d+$/.test(zohoId) || !/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
       return NextResponse.json({ error: 'Parámetros inválidos (zohoId, start, end)' }, { status: 400 })
     }
+
+    // Plinko incluye Anker + Water (½ pto); Ruleta solo Solar + Roofing.
+    const PIPELINE_IN = mode === 'plinko' ? PLINKO_IN : PREMIO_IN
 
     const rows = await query<DealRow>(`
       SELECT
@@ -60,7 +66,7 @@ export async function GET(req: Request) {
         AND fd.closing_date IS NOT NULL
         AND ${ACTIVE_DEAL_SQL}
         AND stm.member_id = $1
-        AND LOWER(dp.pipeline) IN (${PREMIO_IN})
+        AND LOWER(dp.pipeline) IN (${PIPELINE_IN})
       ORDER BY fd.closing_date, dp.pipeline
     `, [zohoId, start, end])
 

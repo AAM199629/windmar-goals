@@ -14,6 +14,7 @@ import {
   GRAD_POINTS,
   GRAD_TARGET,
   PREMIO_PIPELINES,
+  PLINKO_POINTS,
   COMPTESLA_POINTS,
   COMPTESLA_START,
   COMPTESLA_END,
@@ -168,6 +169,12 @@ function sumPipelinesFor(counts: PipelineCounts, pipelines: string[]): number {
   return pipelines.reduce((acc, p) => acc + (counts[p] ?? 0), 0)
 }
 
+// Suma ponderada: cada pipeline aporta (conteo × puntos). Usado por Plinko,
+// donde Solar + Roofing valen 1 pto y Anker + Water valen ½ pto.
+function sumWeightedPipelines(counts: PipelineCounts, weights: Record<string, number>): number {
+  return Object.entries(weights).reduce((acc, [p, w]) => acc + (counts[p] ?? 0) * w, 0)
+}
+
 function calcCruisePts(counts: PipelineCounts): number {
   return Object.entries(CRUISE_POINTS).reduce(
     (acc, [pipeline, pts]) => acc + (counts[pipeline] ?? 0) * pts,
@@ -252,7 +259,7 @@ export function buildMetrics(params: {
 
   // ── Plinko ─────────────────────────────────────────────────────────────────
   const plinko: PlinkoMetrics = {
-    current:         sumPipelinesFor(weeklyPipelines, PREMIO_PIPELINES),
+    current:         sumWeightedPipelines(weeklyPipelines, PLINKO_POINTS),
     target:          plinkoTarget(member.sales_role),
     role,
     weekStart,

@@ -9,8 +9,10 @@ function plinkoRules(role: string, target: number, weekStart: string): string {
 Semana desde: ${weekStart}
 
 Productos elegibles:
-  • Solar (con o sin batería)
-  • Roofing
+  • Solar (con o sin batería) — 1 pto
+  • Roofing — 1 pto
+  • Anker (PPS) — ½ pto
+  • Water — ½ pto
 
 Tu meta (${role}): ${target} ventas semanales
 
@@ -518,11 +520,15 @@ Tu progreso:
           <h3>Plinko — Semana</h3>
           <dl>
             <dt>Solar</dt>
-            <dd>{plinko.weeklyPipelines['residential solar'] || '—'}</dd>
+            <dd>{(plinko.weeklyPipelines['residential solar'] || 0) + (plinko.weeklyPipelines['commercial solar'] || 0) || '—'}</dd>
             <dt>Roofing</dt>
             <dd>{plinko.weeklyPipelines['roofing'] || '—'}</dd>
+            <dt>Anker (½)</dt>
+            <dd>{plinko.weeklyPipelines['pps'] || '—'}</dd>
+            <dt>Water (½)</dt>
+            <dd>{plinko.weeklyPipelines['water products'] || '—'}</dd>
             <dt>Semana</dt><dd>{plinko.weekStart}</dd>
-            <dt>Total elegibles</dt>
+            <dt>Total pts</dt>
             <dd className="highlight">{plinko.current} / {plinko.target}</dd>
           </dl>
         </div>

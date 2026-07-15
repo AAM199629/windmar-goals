@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { PlinkoRuletaResponse, PrizeRow, PrizeRole } from '@/app/api/plinko-ruleta/route'
 import type { DealDetail } from '@/app/api/plinko-ruleta/deals/route'
+import { PLINKO_POINTS } from '@/lib/config'
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 const numTd: React.CSSProperties = {
@@ -104,7 +105,7 @@ export default function PlinkoRuletaClient() {
 
   function openDetail(row: PrizeRow) {
     setDetailRow(row); setDetailDeals(null); setDetailLoading(true)
-    fetch(`/api/plinko-ruleta/deals?zohoId=${row.zohoId}&start=${periodStart}&end=${periodEnd}`)
+    fetch(`/api/plinko-ruleta/deals?zohoId=${row.zohoId}&start=${periodStart}&end=${periodEnd}&mode=${mode}`)
       .then(r => r.json())
       .then((d: { deals?: DealDetail[] }) => setDetailDeals(d.deals ?? []))
       .catch(() => setDetailDeals([]))
@@ -245,7 +246,9 @@ export default function PlinkoRuletaClient() {
       <div style={{ marginTop: '1.5rem', padding: '0 1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontSize: '0.72rem', color: 'var(--gray)', letterSpacing: '0.04em' }}>
         {[
           `${mode === 'plinko' ? 'Meta semanal' : 'Meta mensual'}: Consultor ${metaFor('consultor')} · Líder ${metaFor('lider')} · Gerente ${metaFor('gerente')} ventas`,
-          'Cuentan: Solar (res. + com.) y Roofing',
+          mode === 'plinko'
+            ? 'Cuentan: Solar y Roofing (1 pto) · Anker y Water (½ pto)'
+            : 'Cuentan: Solar (res. + com.) y Roofing',
           'Clasificado = alcanzó su meta en el periodo',
           '⚠️ La lista oficial y final se publica en los respectivos chats',
         ].map(t => (
@@ -268,6 +271,7 @@ export default function PlinkoRuletaClient() {
           periodLabel={periodLabel}
           deals={detailDeals}
           loading={detailLoading}
+          mode={mode}
           onClose={() => setDetailRow(null)}
         />
       )}
@@ -276,9 +280,14 @@ export default function PlinkoRuletaClient() {
 }
 
 // ── Modal con el desglose de las ventas que componen el conteo ──────────────────
-function DealsModal({ row, periodLabel, deals, loading, onClose }: {
-  row: PrizeRow; periodLabel: string; deals: DealDetail[] | null; loading: boolean; onClose: () => void
+function plinkoPts(pipeline: string | null): number {
+  return PLINKO_POINTS[(pipeline ?? '').toLowerCase()] ?? 0
+}
+
+function DealsModal({ row, periodLabel, deals, loading, mode, onClose }: {
+  row: PrizeRow; periodLabel: string; deals: DealDetail[] | null; loading: boolean; mode: Mode; onClose: () => void
 }) {
+  const showPts = mode === 'plinko'
   const th: React.CSSProperties = { padding: '0.55rem 0.7rem', textAlign: 'left', fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)', background: 'var(--navy)', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { padding: '0.55rem 0.7rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--navy)', borderBottom: '1px solid #edf0f8', whiteSpace: 'nowrap' }
   return (
@@ -306,7 +315,7 @@ function DealsModal({ row, periodLabel, deals, loading, onClose }: {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
                 <thead>
                   <tr>
-                    {['Closing date', 'Pipeline', 'Amount', 'Sales rep', 'All Sales Docs Rec.', 'On hold Status'].map(h => (
+                    {['Closing date', 'Pipeline', ...(showPts ? ['Puntos'] : []), 'Amount', 'Sales rep', 'All Sales Docs Rec.', 'On hold Status'].map(h => (
                       <th key={h} style={th}>{h}</th>
                     ))}
                   </tr>
@@ -316,6 +325,11 @@ function DealsModal({ row, periodLabel, deals, loading, onClose }: {
                     <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafbff' }}>
                       <td style={td}>{d.closingDate ?? '—'}</td>
                       <td style={{ ...td, textTransform: 'capitalize' }}>{d.pipeline ?? '—'}</td>
+                      {showPts && (
+                        <td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>
+                          {plinkoPts(d.pipeline) === 0.5 ? '½' : plinkoPts(d.pipeline)}
+                        </td>
+                      )}
                       <td style={{ ...td, fontWeight: 600 }}>{fmtMoney(d.amount)}</td>
                       <td style={td}>{d.salesRep ?? '—'}</td>
                       <td style={{ ...td, color: '#aab4cc' }}>{d.allSalesDocs ?? 'n/d'}</td>
@@ -327,7 +341,7 @@ function DealsModal({ row, periodLabel, deals, loading, onClose }: {
                 </tbody>
               </table>
               <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.68rem', color: '#aab4cc', letterSpacing: '0.03em', padding: '0.75rem 0.7rem 0' }}>
-                “All Sales Docs Received” aún no está disponible en el warehouse (n/d). Se muestran las ventas activas elegibles (Solar + Roofing) del periodo.
+                “All Sales Docs Received” aún no está disponible en el warehouse (n/d). Se muestran las ventas activas elegibles del periodo{showPts ? ' — Solar y Roofing (1 pto) · Anker y Water (½ pto)' : ' (Solar + Roofing)'}.
               </p>
             </div>
           )}
