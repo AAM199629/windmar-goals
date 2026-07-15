@@ -95,10 +95,10 @@ export interface TeamBuilderMetrics {
 
 export interface CompetenciaTeslaMetrics {
   points:          number   // número grande de la tarjeta
-  ventas:          number   // total ventas Tesla (hacia el mínimo de 10)
-  bateriaConSolar: number
-  bateriaSola:     number
-  asistida:        number
+  ventas:          number   // total deals Tesla (hacia el mínimo de 10) — por venta, no por batería
+  bateriaConSolar: number   // cantidad de baterías Tesla con solar (suma de battery_qty)
+  bateriaSola:     number   // cantidad de baterías Tesla solas (suma de battery_qty)
+  asistida:        number   // deals asistidos (1ª–4ª venta de un trainee) — por venta
   start:           string
   end:             string
 }
@@ -204,7 +204,7 @@ export function buildMetrics(params: {
   monthlyCount:       number
   weeklyPipelines:    PipelineCounts
   monthlyPipelines:   PipelineCounts
-  teslaCompCounts:    { bateriaConSolar: number; bateriaSola: number; asistida: number }
+  teslaCompCounts:    { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }
   currentMonth:       string
   weekStart:          string
   cruiseStart:        string
@@ -302,7 +302,8 @@ export function buildMetrics(params: {
     bateriaConSolar: teslaCompCounts.bateriaConSolar,
     bateriaSola:     teslaCompCounts.bateriaSola,
     asistida:        teslaCompCounts.asistida,
-    ventas:          teslaCompCounts.bateriaConSolar + teslaCompCounts.bateriaSola,
+    // Ventas hacia el mínimo /10: por deal Tesla, NO por cantidad de baterías.
+    ventas:          teslaCompCounts.ventas,
     points:
       teslaCompCounts.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
       teslaCompCounts.bateriaSola     * COMPTESLA_POINTS.bateriaSola +

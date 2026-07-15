@@ -37,6 +37,7 @@ interface TeslaCompRow {
   member_id:         string
   bateria_con_solar: string | number
   bateria_sola:      string | number
+  ventas:            string | number
 }
 
 interface AsistidaRow {
@@ -62,11 +63,13 @@ const fetchTeslaLeaderboard = unstable_cache(
       // ── 2. Batería Tesla propia: con solar (1 pt) / sola (0.5 pt) ───────────
       // Batería Tesla = battery_qty > 0 AND battery_type contiene 'tesla'.
       // Con solar = system_size_kw1 > 0 · Sola = system_size_kw1 en 0/null.
+      // PUNTOS por cantidad de baterías (× battery_qty); VENTAS por deal (COUNT).
       query<TeslaCompRow>(`
         SELECT
           stm.member_id,
-          SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN 1 ELSE 0 END) AS bateria_con_solar,
-          SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN 1 ELSE 0 END) AS bateria_sola
+          SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_con_solar,
+          SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_sola,
+          COUNT(*) AS ventas
         FROM dwh.fact_deals fd
         JOIN dwh.dim_status_reason dsr
           ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
@@ -110,18 +113,19 @@ const fetchTeslaLeaderboard = unstable_cache(
     ])
 
     // ── Build lookup maps ──────────────────────────────────────────────────────
-    const compMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number }> = {}
+    const compMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }> = {}
     for (const r of teslaCompRows) {
       if (!r.member_id) continue
       compMap[r.member_id] = {
         bateriaConSolar: Number(r.bateria_con_solar) || 0,
         bateriaSola:     Number(r.bateria_sola)      || 0,
         asistida:        0,
+        ventas:          Number(r.ventas)            || 0,
       }
     }
     for (const r of teslaAsistidaRows) {
       if (!r.mentor_id) continue
-      const e = compMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0 }
+      const e = compMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 }
       e.asistida = Number(r.cnt) || 0
       compMap[r.mentor_id] = e
     }
@@ -132,12 +136,13 @@ const fetchTeslaLeaderboard = unstable_cache(
       const role = normalizeRole(m.sales_role)
       if (role === 'trainee') continue
 
-      const c = compMap[m.member_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0 }
+      const c = compMap[m.member_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 }
       const points =
         c.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
         c.bateriaSola     * COMPTESLA_POINTS.bateriaSola +
         c.asistida        * COMPTESLA_POINTS.asistida
-      const ventas = c.bateriaConSolar + c.bateriaSola
+      // Ventas hacia el mínimo /10: por deal Tesla, NO por cantidad de baterías.
+      const ventas = c.ventas
 
       rows.push({
         zohoId:          m.member_id,

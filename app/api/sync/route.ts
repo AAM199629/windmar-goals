@@ -230,11 +230,14 @@ async function runSync(month: string) {
     // ── 8b. Competencia Tesla: batería con solar / sola (ventas propias) ───────
     // Batería Tesla = battery_qty > 0 AND battery_type contiene 'tesla'.
     // Con solar (1 pt) = system_size_kw1 > 0 · Sola (0.5 pt) = system_size_kw1 en 0/null.
-    const teslaCompRows = await query<{ member_id: string; bateria_con_solar: string | number; bateria_sola: string | number }>(`
+    // Los PUNTOS se cuentan por cantidad de baterías (× battery_qty); las VENTAS
+    // (hacia el mínimo de 10) se cuentan por deal, sin importar cuántas baterías.
+    const teslaCompRows = await query<{ member_id: string; bateria_con_solar: string | number; bateria_sola: string | number; ventas: string | number }>(`
       SELECT
         stm.member_id,
-        SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN 1 ELSE 0 END) AS bateria_con_solar,
-        SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN 1 ELSE 0 END) AS bateria_sola
+        SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_con_solar,
+        SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_sola,
+        COUNT(*) AS ventas
       FROM dwh.fact_deals fd
       JOIN dwh.dim_status_reason dsr
         ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
@@ -275,18 +278,19 @@ async function runSync(month: string) {
       GROUP BY stm_mentor.member_id
     `, [COMPTESLA_START, COMPTESLA_END])
 
-    const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number }> = {}
+    const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }> = {}
     for (const r of teslaCompRows) {
       if (!r.member_id) continue
       teslaCompMap[r.member_id] = {
         bateriaConSolar: Number(r.bateria_con_solar) || 0,
         bateriaSola:     Number(r.bateria_sola)      || 0,
         asistida:        0,
+        ventas:          Number(r.ventas)            || 0,
       }
     }
     for (const r of teslaAsistidaRows) {
       if (!r.mentor_id) continue
-      const e = teslaCompMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0 }
+      const e = teslaCompMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 }
       e.asistida = Number(r.cnt) || 0
       teslaCompMap[r.mentor_id] = e
     }
@@ -338,7 +342,7 @@ async function runSync(month: string) {
             monthlyCount:      monthlyMap[member.member_id]            ?? 0,
             weeklyPipelines:   weeklyPipelineMap[member.member_id]     ?? {},
             monthlyPipelines:  monthlyPipelineMap[member.member_id]    ?? {},
-            teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0 },
+            teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 },
             currentMonth:      month,
             weekStart:         monday,
             cruiseStart:       CRUISE_START,
