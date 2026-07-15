@@ -15,8 +15,12 @@ function currentTeslaPeriod() {
 const _tesla = currentTeslaPeriod()
 export const TESLA_START = process.env.TESLA_START_DATE ?? _tesla.start
 export const TESLA_END   = process.env.TESLA_END_DATE   ?? _tesla.end
-export const CRUISE_START = process.env.CRUISE_START_DATE ?? '2026-01-01'
-export const CRUISE_END   = process.env.CRUISE_END_DATE   ?? '2026-12-31'
+// Fechas fijas de la competencia del crucero (01 ene – 31 dic 2026).
+// Hardcodeadas a propósito: un env var rezagado (CRUISE_START_DATE=2025-11-01)
+// sobrescribía este valor y desincronizaba el dashboard (en vivo) de las
+// tarjetas (KV del sync), inflando los puntos de crucero. No usar env override.
+export const CRUISE_START = '2026-01-01'
+export const CRUISE_END   = '2026-12-31'
 
 // Deals excluidos de TODA métrica de competencia: cancelados + en hold.
 // on_hold_status vive en dwh.dim_status_reason (alias `dsr` en todas las queries);
@@ -90,10 +94,23 @@ export function nextGradRole(role: 'trainee' | 'consultor' | 'lider' | 'gerente'
   return 'gerente' // lider → gerente; gerente stays at gerente (won't show graduation card)
 }
 
-// Pipelines that qualify for Plinko and Ruleta prizes
+// Pipelines that qualify for Ruleta prizes (Solar + Roofing, 1 venta c/u)
 export const PREMIO_PIPELINES = ['residential solar', 'commercial solar', 'roofing']
 
-// Plinko: weekly qualifying sales target by role (Solar + Roofing, year-round)
+// Plinko: puntos de venta por pipeline. Solar + Roofing = 1 pto;
+// Anker (pps) + Water = ½ pto. (Ruleta sigue contando solo Solar + Roofing.)
+export const PLINKO_POINTS: Record<string, number> = {
+  'residential solar': 1,
+  'commercial solar':  1,
+  'roofing':           1,
+  'water products':    0.5,
+  'pps':               0.5,
+}
+
+// Pipelines elegibles para Plinko (incluye Anker + Water a ½ pto)
+export const PLINKO_PIPELINES = Object.keys(PLINKO_POINTS)
+
+// Plinko: weekly qualifying sales target by role (year-round)
 export function plinkoTarget(role: string | null | undefined): number {
   const r = normalizeRole(role)
   if (r === 'lider' || r === 'gerente') return 3
