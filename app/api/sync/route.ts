@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
 import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, type ComptesaRankings, type GerenteAccionistaRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL } from '@/lib/config'
+import type { MemberEntry } from '@/lib/kv'
 
 function currentYYYYMM() {
   const d = new Date()
@@ -397,11 +398,20 @@ async function runSync(month: string) {
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length
 
+    // Promotores: no tienen métricas de vendedor, pero deben ser descubribles en
+    // la búsqueda y enrutar a su dashboard de promotor (/p/[zohoId] hace el branch).
+    const promotores = await query<{ member_id: string; full_name: string }>(`
+      SELECT member_id, full_name
+      FROM dw_zoho.dim_sales_team_member
+      WHERE member_id IS NOT NULL AND email IS NOT NULL
+        AND ${PROMOTOR_ROLES_SQL}
+    `)
+
     // Save compact members index for the directory/search page
-    const membersList = results
-      .filter(r => r.ok)
-      .map(r => ({ zohoId: r.zohoId, name: r.name }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    const membersList: MemberEntry[] = [
+      ...results.filter(r => r.ok).map(r => ({ zohoId: r.zohoId, name: r.name })),
+      ...promotores.map(p => ({ zohoId: p.member_id, name: p.full_name, role: 'promotor' as const })),
+    ].sort((a, b) => a.name.localeCompare(b.name))
     await setMembersList(membersList)
 
   return {

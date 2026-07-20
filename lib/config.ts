@@ -50,6 +50,26 @@ export const ALLOWED_SALES_ROLES = [
 export const ALLOWED_ROLES_SQL =
   `sales_role IN (${ALLOWED_SALES_ROLES.map(r => `'${r}'`).join(', ')})`
 
+// ── Promotores ─────────────────────────────────────────────────────────────────
+// Los promotores NO venden: generan leads para que un vendedor cierre. Están
+// EXCLUIDOS de ALLOWED_SALES_ROLES (leaderboards/premios) y tienen su propia vista.
+// En el warehouse, el promotor se conserva en dwh.dim_employee.sales_rep_email
+// durante todo el ciclo del lead (incluso citas y casos vendidos), así que sus
+// leads/citas se rastrean por ese campo. Valores estáticos → interpolación segura.
+export const PROMOTOR_ROLES = ['Promotor']
+export const PROMOTOR_ROLES_SQL =
+  `sales_role IN (${PROMOTOR_ROLES.map(r => `'${r}'`).join(', ')})`
+
+export function isPromotor(role: string | null | undefined): boolean {
+  return PROMOTOR_ROLES.some(r => r.toLowerCase() === (role ?? '').toLowerCase())
+}
+
+// lead_status (dwh.dim_lead_status_extended) que representan una cita generada.
+export const CITA_LEAD_STATUSES = [
+  'Cita Coordinada', 'Cita Confirmada', 'Cita Realizada', 'Cita en Espera', 'Caso Vendido',
+]
+export const SOLD_LEAD_STATUS = 'Caso Vendido'
+
 // Pipeline field values from dwh.dim_profiles (lowercase)
 // Tesla: only solar + roofing count
 export const TESLA_PIPELINES = ['residential solar', 'commercial solar', 'roofing']

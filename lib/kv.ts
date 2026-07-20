@@ -25,7 +25,7 @@ export async function getAllMetricKeys(): Promise<string[]> {
   return redis.keys(`${PREFIX}:metrics:*`)
 }
 
-export interface MemberEntry { zohoId: string; name: string }
+export interface MemberEntry { zohoId: string; name: string; role?: 'promotor' }
 
 export async function setMembersList(members: MemberEntry[]): Promise<void> {
   await redis.set(`${PREFIX}:members`, members, { ex: 60 * 60 * 25 })
