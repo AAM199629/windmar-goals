@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-interface Member { zohoId: string; name: string }
+interface Member { zohoId: string; name: string; role?: 'promotor' }
 
 export default function SearchPage() {
   const [members, setMembers]   = useState<Member[]>([])
@@ -117,6 +117,14 @@ export default function SearchPage() {
                     <span style={{ fontWeight: 500, color: 'var(--navy)', fontSize: '0.97rem' }}>
                       {m.name}
                     </span>
+                    {m.role === 'promotor' && (
+                      <span style={{
+                        background: 'rgba(21,101,192,0.12)', color: 'var(--blue)',
+                        fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.6rem',
+                        letterSpacing: '0.1em', textTransform: 'uppercase',
+                        padding: '0.15rem 0.5rem', borderRadius: 999,
+                      }}>Promotor</span>
+                    )}
                     <span style={{ marginLeft: 'auto', color: 'var(--gray)', fontSize: '1rem' }}>›</span>
                   </button>
                 </li>

@@ -1,6 +1,8 @@
 import GoalCard from '@/components/GoalCard'
+import PromotorDashboardClient from '@/components/PromotorDashboardClient'
 import { getMetrics, getComptesaRankings, getGerenteAccionistaRankings } from '@/lib/kv'
-import { GRAD_POINTS, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET } from '@/lib/config'
+import { query } from '@/lib/redshift'
+import { GRAD_POINTS, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, isPromotor } from '@/lib/config'
 
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
 
@@ -114,6 +116,16 @@ export default async function DashboardPage({
   const metrics    = await getMetrics(zohoId)
 
   if (!metrics) {
+    // Los promotores no se sincronizan a KV: detectarlos por rol y mostrar su
+    // dashboard propio (leads / citas) en vez del de vendedor.
+    const rows = await query<{ full_name: string; sales_role: string | null }>(
+      `SELECT full_name, sales_role FROM dw_zoho.dim_sales_team_member WHERE member_id = $1`,
+      [zohoId],
+    )
+    if (rows.length > 0 && isPromotor(rows[0].sales_role)) {
+      return <PromotorDashboardClient zohoId={zohoId} name={rows[0].full_name} />
+    }
+
     return (
       <main className="not-found">
         <div className="not-found-box">
