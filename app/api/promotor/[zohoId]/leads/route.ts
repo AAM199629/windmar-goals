@@ -58,28 +58,33 @@ export async function GET(
       return NextResponse.json({ error: 'month=YYYY-MM requerido' }, { status: 400 })
     }
 
-    const memberRows = await query<{ email: string }>(
-      `SELECT email FROM dw_zoho.dim_sales_team_member WHERE member_id = $1`, [zohoId],
+    const memberRows = await query<{ full_name: string; email: string }>(
+      `SELECT full_name, email FROM dw_zoho.dim_sales_team_member WHERE member_id = $1`, [zohoId],
     )
     if (memberRows.length === 0 || !memberRows[0].email) {
       return NextResponse.json({ error: `No se encontró promotor para zohoId=${zohoId}` }, { status: 404 })
     }
     const email = memberRows[0].email.toLowerCase()
+    const name  = memberRows[0].full_name
+
+    // El promotor puede estar como "Sales Rep" (sales_rep_email) o, tras el handoff,
+    // como "Sales Assist" (gerente_asignado). $1 email · $2 nombre · $3/$4 rango.
+    const MATCH = `(LOWER(emp.sales_rep_email) = $1 OR emp.gerente_asignado = $2)`
 
     // Filtro + rango + orden según el tipo de métrica
     let filter: string
     let start: string, end: string, orderBy: string
     if (type === 'semana') {
       const wk = currentWeek(); start = wk.start; end = wk.nextDay
-      filter = `a.created_time >= $2 AND a.created_time < $3`
+      filter = `a.created_time >= $3 AND a.created_time < $4`
       orderBy = 'a.created_time DESC'
     } else if (type === 'creados') {
       const b = monthBounds(month); start = b.first; end = b.next
-      filter = `a.created_time >= $2 AND a.created_time < $3`
+      filter = `a.created_time >= $3 AND a.created_time < $4`
       orderBy = 'a.created_time DESC'
     } else { // citas | vendidos
       const b = monthBounds(month); start = b.first; end = b.next
-      filter = `emp.presenter_appointment >= $2 AND emp.presenter_appointment < $3`
+      filter = `emp.presenter_appointment >= $3 AND emp.presenter_appointment < $4`
       if (type === 'vendidos') filter += ` AND lse.lead_status = '${SOLD_LEAD_STATUS}'`
       orderBy = 'emp.presenter_appointment DESC'
     }
@@ -112,16 +117,14 @@ export async function GET(
         ON LOWER(rep.email) = LOWER(emp.sales_rep_email)
       LEFT JOIN dwh.dim_audit_system_leads a
         ON a.id_audit_system = fl.id_audit_system
-      WHERE LOWER(emp.sales_rep_email) = $1
+      WHERE ${MATCH}
         AND ${filter}
       ORDER BY ${orderBy}
-    `, [email, start, end])
+    `, [email, name, start, end])
 
     const out: PromotorLeadDetail[] = rows.map(r => {
-      const asignado = (r.gerente_asignado ?? '').trim()
-      const vendedor = asignado !== ''
-        ? asignado
-        : (r.rep_name?.trim() || r.rep_email?.trim() || null)
+      // Vendedor asignado = el "Sales Rep" actual (sales_rep_email resuelto).
+      const vendedor = r.rep_name?.trim() || r.rep_email?.trim() || null
       return {
         leadName:    r.lead_name,
         createdDate: r.created_date ? new Date(r.created_date).toISOString() : null,

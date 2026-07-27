@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { PROMOTOR_ROLES_SQL, SOLD_LEAD_STATUS } from '@/lib/config'
+import { PROMOTOR_ROLES_SQL, SOLD_LEAD_STATUS, promotorActiveSql } from '@/lib/config'
 
 // Meta semanal de leads registrados (semana en curso, lun–dom). Igual que en la
 // ruta individual /api/promotor/[zohoId].
@@ -81,7 +81,9 @@ export async function GET(req: Request) {
       JOIN dwh.dim_employee emp
         ON emp.id_employee = fl.id_employee AND emp.is_current = true
       JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(emp.sales_rep_email) AND stm.${PROMOTOR_ROLES_SQL}
+        ON (LOWER(stm.email) = LOWER(emp.sales_rep_email) OR stm.full_name = emp.gerente_asignado)
+       AND stm.${PROMOTOR_ROLES_SQL}
+       AND ${promotorActiveSql('stm')}
       LEFT JOIN dwh.dim_lead_status_extended lse
         ON lse.id_lead_status_extended = fl.id_lead_status_extended AND lse.is_current = true
       LEFT JOIN dwh.dim_audit_system_leads a

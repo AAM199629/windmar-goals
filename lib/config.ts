@@ -64,6 +64,15 @@ export function isPromotor(role: string | null | undefined): boolean {
   return PROMOTOR_ROLES.some(r => r.toLowerCase() === (role ?? '').toLowerCase())
 }
 
+// Un promotor "activo" = Status 'Activo' Y el check "Inactive" sin marcar
+// (inactive = 'False'/vacío/null). Pásale el alias de dim_sales_team_member
+// usado en la query (p. ej. 'stm'); sin alias para queries sin alias.
+export function promotorActiveSql(alias = ''): string {
+  const p = alias ? `${alias}.` : ''
+  return `LOWER(${p}status) = 'activo' ` +
+    `AND (${p}inactive IS NULL OR ${p}inactive = '' OR LOWER(${p}inactive) = 'false')`
+}
+
 // lead_status (dwh.dim_lead_status_extended) que representan una cita generada.
 export const CITA_LEAD_STATUSES = [
   'Cita Coordinada', 'Cita Confirmada', 'Cita Realizada', 'Cita en Espera', 'Caso Vendido',
