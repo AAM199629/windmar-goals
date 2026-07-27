@@ -11,8 +11,14 @@ function getPool(): Pool {
       user:     process.env.REDSHIFT_USER,
       password: process.env.REDSHIFT_PASSWORD,
       ssl:      { rejectUnauthorized: false },
-      max:      5,
+      max:      10,
       idleTimeoutMillis: 30_000,
+      // Si el pool está saturado, fallar rápido en vez de colgar la petición
+      // para siempre (evita el spinner infinito en modales/tarjetas).
+      connectionTimeoutMillis: 15_000,
+      // Corta queries desbocadas del lado de Redshift (las de usuario son <1s;
+      // margen amplio para las agregaciones del sync).
+      statement_timeout: 90_000,
     })
   }
   return pool
