@@ -82,6 +82,12 @@ export async function GET(
       return NextResponse.json({ error: `No se encontró promotor para zohoId=${zohoId}` }, { status: 404 })
     }
     const email = memberRows[0].email.toLowerCase()
+    const name  = memberRows[0].full_name
+
+    // El promotor puede ser el "Sales Rep" del lead (sales_rep_email) o, tras el
+    // handoff a un vendedor, quedar como "Sales Assist" (dwh.dim_employee.gerente_asignado).
+    // Por eso lo identificamos por CUALQUIERA de los dos campos.
+    const MATCH = `(LOWER(emp.sales_rep_email) = $1 OR emp.gerente_asignado = $2)`
 
     // 2. Leads creados en el mes + desglose por status de lead
     const statusRows = await query<{ lead_status: string | null; n: string | number }>(`
@@ -93,11 +99,11 @@ export async function GET(
         ON lse.id_lead_status_extended = fl.id_lead_status_extended AND lse.is_current = true
       JOIN dwh.dim_audit_system_leads a
         ON a.id_audit_system = fl.id_audit_system
-      WHERE LOWER(emp.sales_rep_email) = $1
-        AND a.created_time >= $2 AND a.created_time < $3
+      WHERE ${MATCH}
+        AND a.created_time >= $3 AND a.created_time < $4
       GROUP BY COALESCE(lse.lead_status, 'Sin status')
       ORDER BY n DESC
-    `, [email, first, next])
+    `, [email, name, first, next])
 
     const byLeadStatus = statusRows.map(r => ({ status: r.lead_status ?? 'Sin status', n: Number(r.n) }))
     const leadsCreados = byLeadStatus.reduce((s, r) => s + r.n, 0)
@@ -133,19 +139,16 @@ export async function GET(
         ON aps.id_appointment_status = fl.id_appointment_status AND aps.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member rep
         ON LOWER(rep.email) = LOWER(emp.sales_rep_email)
-      WHERE LOWER(emp.sales_rep_email) = $1
-        AND emp.presenter_appointment >= $2 AND emp.presenter_appointment < $3
+      WHERE ${MATCH}
+        AND emp.presenter_appointment >= $3 AND emp.presenter_appointment < $4
       ORDER BY emp.presenter_appointment
-    `, [email, first, next])
+    `, [email, name, first, next])
 
-    // Vendedor = lo que haya en sistema: el asignado (gerente_asignado) si existe,
-    // si no el "Sales Rep" actual del lead (nombre resuelto o su email). En estos
-    // leads el Sales Rep suele seguir siendo el propio promotor (no reasignado).
+    // Vendedor asignado = el "Sales Rep" actual del lead (sales_rep_email resuelto a
+    // nombre). Tras el handoff es el vendedor real; si el lead sigue a nombre del
+    // promotor, es el propio promotor. (El promotor vive en gerente_asignado = Sales Assist.)
     const citas: PromotorCita[] = citaRows.map(r => {
-      const asignado = (r.gerente_asignado ?? '').trim()
-      const vendedor = asignado !== ''
-        ? asignado
-        : (r.rep_name?.trim() || r.rep_email?.trim() || null)
+      const vendedor = r.rep_name?.trim() || r.rep_email?.trim() || null
       return {
         leadName:   r.lead_name,
         citaDate:   r.cita_date ? new Date(r.cita_date).toISOString() : null,
@@ -168,9 +171,9 @@ export async function GET(
         ON emp.id_employee = fl.id_employee AND emp.is_current = true
       JOIN dwh.dim_audit_system_leads a
         ON a.id_audit_system = fl.id_audit_system
-      WHERE LOWER(emp.sales_rep_email) = $1
-        AND a.created_time >= $2 AND a.created_time < $3
-    `, [email, wk.start, wk.nextDay])
+      WHERE ${MATCH}
+        AND a.created_time >= $3 AND a.created_time < $4
+    `, [email, name, wk.start, wk.nextDay])
     const weekLeads = Number(weekRows[0]?.n ?? 0)
 
     return NextResponse.json({

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
 import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, type ComptesaRankings, type GerenteAccionistaRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
 import type { MemberEntry } from '@/lib/kv'
 
 function currentYYYYMM() {
@@ -405,6 +405,7 @@ async function runSync(month: string) {
       FROM dw_zoho.dim_sales_team_member
       WHERE member_id IS NOT NULL AND email IS NOT NULL
         AND ${PROMOTOR_ROLES_SQL}
+        AND ${promotorActiveSql()}
     `)
 
     // Save compact members index for the directory/search page
