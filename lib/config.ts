@@ -179,6 +179,96 @@ export const COMPTESLA_POINTS = {
 }
 export const COMPTESLA_MIN_VENTAS = 10  // requisito mínimo para clasificar
 
+// ── Participantes de la Competencia Tesla (líderes y gerentes) ─────────────────
+// Solo un subconjunto específico de líderes/gerentes participa en el viaje de
+// Tesla. Los consultores NO se filtran (todos compiten); los trainees nunca
+// participan. Un líder/gerente que NO esté en este set queda fuera del leaderboard
+// (dashboard general + mini top-10 de tarjetas) y NO ve la tarjeta "Competencia
+// Tesla" en su página (`competenciaTesla` = null en buildMetrics).
+//
+// El set contiene `member_id` (dw_zoho.dim_sales_team_member.member_id), resueltos
+// una sola vez desde la hoja de asistencia — más robusto que match por nombre
+// (evita acentos y segundos apellidos). Comentario = nombre de la hoja → nombre en BD.
+// Para actualizar la lista, reconciliar los nombres nuevos contra Redshift y añadir
+// su member_id aquí. Ver [[competencia-tesla]].
+export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
+  '4258103000030093001', // Merari Velazquez → Merari Velazquez Aldarondo
+  '4258103000319926145', // Wilson Morales → Wilson Morales Ruiz
+  '4258103000297004045', // Anibal Colon → Anibal Jose Colon Colon
+  '4258103000003350229', // Hector Villanueva → Hector Daniel Villanueva Marrero
+  '4258103000000711093', // Isabel Echevarria → Isabel Echevarria Garcia
+  '4258103000029953767', // Francisco Armando Sanchez → Francisco Armando Sanchez Zayas
+  '4258103000698213054', // Nathalia Cordova → Nathalia Cristina Cordova Moran
+  '4258103000552938725', // Edwin Ruiz → Edwin Ruiz Vazquez
+  '4258103001936980056', // Jonathan Torres → Jonathan Torres Fernandez
+  '4258103000798572632', // Jose Bethancourt → Jose Luis Betancourt Torres
+  '4258103000606852282', // Reynaldo Rodriguez → Reynaldo Hommy Rodriguez Sanchez
+  '4258103000000711063', // Ramonita Echevarria → Ramonita Echevarria Roman
+  '4258103001246393100', // Jose David Berrios → Jose David Berrios Borges
+  '4258103000372901245', // Yiviana Cruz → Yiviana Cruz Marrero
+  '4258103001114234830', // Axel Gomez → Axel Fabian Gomez Rivera
+  '4258103000487530798', // Ricardo Gomez → Ricardo Gomez Martinez
+  '4258103000542544907', // Franchesca Carradero → Fransheska Carradero Roldan
+  '4258103000777019267', // Aneudy Bonilla → Aneudy Luis Bonilla Gonzalez
+  '4258103000000711132', // Brayan Sanchez → Brayan Sanchez Ortiz
+  '4258103000079696794', // Miguel Soto → Miguel A Soto Nunez
+  '4258103000058172003', // Victor Sarriera → Victor Daniel Sarriera Morales
+  '4258103000424185134', // Yaritza Villoch → Yaritza Villoch Tirado
+  '4258103000000711050', // Kenneth La Quay → Kenneth La Quay
+  '4258103000000711133', // Brian Mangual → Brian Mangual Sanchez
+  '4258103000000711078', // Emmanuel Ortiz → Emmanuel Ortiz De Jesus
+  '4258103000046246223', // Joel Muniz → Joel Enrique Muniz Aybar
+  '4258103000591573726', // Michelle Saez → Michelle Marie Saez Pabon
+  '4258103001135562364', // Rosiris Cruz → Rosiris Cruz Ortiz
+  '4258103000065985237', // Edward Ruiz → Edward Ruiz Medina
+  '4258103000381339494', // Hector Cruz → Hector Manuel Cruz Rodriguez
+  '4258103000000711103', // Zoribeth Burgos → Zoribeth Burgos
+  '4258103000381109258', // Marie Lee Jaime → Marie Lee Jaime Fernandez
+  '4258103000490205959', // Jorge Serrano → Jorge Enrique Serrano Gonzalez
+  '4258103002494500689', // Derek Martinez → Derek Martinez Alejandrino
+  '4258103000487219001', // Giovanni Rivera → Giovanni Roberto Rivera Orengo
+  '4258103000009138346', // Elliot Rodriguez → Elliot Gabriel Rodriguez Gonzalez
+  '4258103000090738287', // Alfredo Delgado → Alfredo Delgado Alvarado
+  '4258103000142039373', // Gustavo Bernard → Gustavo Jose Bernard Rivera
+  '4258103000438489001', // Edward Cintron → Edward Cintron Martinez
+  '4258103000873701964', // Abimelec Martinez → Abimelec Martinez Munoz
+  '4258103000083843121', // David Fonseca → David E Fonseca Rios
+  '4258103000119369585', // Yesenia Rodriguez → Yesenia Rodriguez Berrios
+  '4258103000049421231', // Feranza Colon → Feranza Colon Bonilla
+  '4258103000168427704', // Brian Sanchez → Brian E Sanchez Rivera
+  '4258103000271491139', // Carlos Alejandro → Carlos Emmanuel Alejandro Mercado
+  '4258103000103726294', // Odette Perez → Odette Perez Morales
+  '4258103000003350226', // Rafael Garces → Rafael Garces Morales
+  '4258103000119369678', // Angel Marrero → Angel Marrero Luciano
+  '4258103000003350209', // Raul Deya → Raul Deya
+  '4258103000000711054', // Norbert Cruz → Norbert Cruz Cabrera
+  '4258103000131582166', // Briand Ramos → Briand Steven Ramos Diaz
+  '4258103000000711056', // Roberto Pacheco → Roberto Pacheco
+  '4258103000010650145', // Ernesto Aguayo → Ernesto Aguayo Mendoza
+  '4258103000585111028', // Carlos Velez → Carlos Alberto Velez Rivera
+  '4258103000000711085', // Edwin Colon → Edwin Colon
+  '4258103000003350206', // Jose Luis Nogueras → Jose Luis Nogueras
+  '4258103000076368798', // Adriana Rodriguez → Adriana Paola Rodriguez Lopez
+  '4258103000000711117', // Karina Bobe → Karina N Bobe
+  '4258103000162151017', // Luis Fortuno → Luis Manuel Fortuno Ortiz
+  '4258103000300554469', // Miguel Mercado → Miguel Antonio Mercado Bruno
+  '4258103000173090001', // Xavier Musa → Xavier Omar Musa Matos
+  '4258103000000711059', // Joselyne Soto → Joselyne Soto Gonzalez
+  '4258103000744329794', // Alex S. Rios → Alex Samuel Rios Ethna
+  '4258103000096372924', // Angel Gonzalez → Angel Francisco Gonzalez Ramos
+])
+
+// Gate de participación en la Competencia Tesla. Consultores: todos compiten.
+// Líderes/gerentes: solo los del allow-list. Trainees: nunca.
+export function isComptesaParticipant(
+  memberId: string,
+  role: 'trainee' | 'consultor' | 'lider' | 'gerente',
+): boolean {
+  if (role === 'consultor') return true
+  if (role === 'lider' || role === 'gerente') return COMPTESLA_PARTICIPANT_IDS.has(memberId)
+  return false // trainee
+}
+
 // ── Gerente Accionista (año 2026; promociones ≤ 31 dic 2026) ───────────────────
 // Tarjeta solo para gerentes (Gerente, Empleado - Gerente, Gerente Accionista).
 export const GERENTEA_START = process.env.GERENTEA_START_DATE ?? '2026-01-01'
