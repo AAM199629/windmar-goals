@@ -315,7 +315,7 @@ function DealsModal({ row, periodLabel, deals, loading, mode, onClose }: {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
                 <thead>
                   <tr>
-                    {['Closing date', 'Pipeline', ...(showPts ? ['Puntos'] : []), 'Amount', 'Sales rep', 'All Sales Docs Rec.', 'On hold Status'].map(h => (
+                    {['Caso', 'Closing date', 'Pipeline', ...(showPts ? ['Puntos'] : []), 'Amount', 'Sales rep', 'All Sales Docs Rec.', 'On hold Status'].map(h => (
                       <th key={h} style={th}>{h}</th>
                     ))}
                   </tr>
@@ -323,6 +323,7 @@ function DealsModal({ row, periodLabel, deals, loading, mode, onClose }: {
                 <tbody>
                   {deals.map((d, i) => (
                     <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafbff' }}>
+                      <td style={{ ...td, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--navy)' }}>{d.caseNumber ?? '—'}</td>
                       <td style={td}>{d.closingDate ?? '—'}</td>
                       <td style={{ ...td, textTransform: 'capitalize' }}>{d.pipeline ?? '—'}</td>
                       {showPts && (

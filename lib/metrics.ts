@@ -18,6 +18,7 @@ import {
   COMPTESLA_POINTS,
   COMPTESLA_START,
   COMPTESLA_END,
+  isComptesaParticipant,
   GERENTEA_START,
   GERENTEA_END,
   GERENTEA_PRIMARY,
@@ -305,19 +306,25 @@ export function buildMetrics(params: {
   }
 
   // ── Competencia Tesla ────────────────────────────────────────────────────────
-  const competenciaTesla: CompetenciaTeslaMetrics = {
-    bateriaConSolar: teslaCompCounts.bateriaConSolar,
-    bateriaSola:     teslaCompCounts.bateriaSola,
-    asistida:        teslaCompCounts.asistida,
-    // Ventas hacia el mínimo /10: por deal Tesla, NO por cantidad de baterías.
-    ventas:          teslaCompCounts.ventas,
-    points:
-      teslaCompCounts.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
-      teslaCompCounts.bateriaSola     * COMPTESLA_POINTS.bateriaSola +
-      teslaCompCounts.asistida        * COMPTESLA_POINTS.asistida,
-    start: COMPTESLA_START,
-    end:   COMPTESLA_END,
-  }
+  // Solo participan los líderes/gerentes del allow-list + todos los consultores.
+  // Un no-participante recibe `null`: sin tarjeta ni desglose en su página, y
+  // excluido del ranking (el sync solo hace push si competenciaTesla != null).
+  const competenciaTesla: CompetenciaTeslaMetrics | null =
+    isComptesaParticipant(member.member_id, role)
+      ? {
+          bateriaConSolar: teslaCompCounts.bateriaConSolar,
+          bateriaSola:     teslaCompCounts.bateriaSola,
+          asistida:        teslaCompCounts.asistida,
+          // Ventas hacia el mínimo /10: por deal Tesla, NO por cantidad de baterías.
+          ventas:          teslaCompCounts.ventas,
+          points:
+            teslaCompCounts.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
+            teslaCompCounts.bateriaSola     * COMPTESLA_POINTS.bateriaSola +
+            teslaCompCounts.asistida        * COMPTESLA_POINTS.asistida,
+          start: COMPTESLA_START,
+          end:   COMPTESLA_END,
+        }
+      : null
 
   // ── Gerente Accionista (solo gerentes: Gerente / Empleado - Gerente / Gerente Accionista) ──
   let gerenteAccionista: GerenteAccionistaMetrics | null = null

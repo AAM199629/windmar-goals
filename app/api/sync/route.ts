@@ -91,7 +91,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -111,7 +111,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       JOIN (
         SELECT member_id, upline_level_1 AS upline_id FROM dw_zoho.dim_sales_team_member WHERE upline_level_1 IS NOT NULL
         UNION ALL
@@ -140,7 +140,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -158,7 +158,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm_trainee
-        ON LOWER(stm_trainee.email) = LOWER(ds.sale_rep_email)
+        ON stm_trainee.member_id = ds.sales_rep
       LEFT JOIN dw_zoho.dim_sales_team_member stm_mentor
         ON stm_mentor.member_id = stm_trainee.sponsor_id
       WHERE fd.closing_date >= $1
@@ -179,7 +179,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -199,7 +199,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -219,7 +219,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -245,7 +245,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $1
         AND fd.closing_date <= $2
         AND fd.closing_date IS NOT NULL
@@ -265,7 +265,7 @@ async function runSync(month: string) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm_trainee
-        ON LOWER(stm_trainee.email) = LOWER(ds.sale_rep_email)
+        ON stm_trainee.member_id = ds.sales_rep
       LEFT JOIN dw_zoho.dim_sales_team_member stm_mentor
         ON stm_mentor.member_id = stm_trainee.sponsor_id
       WHERE fd.closing_date >= $1

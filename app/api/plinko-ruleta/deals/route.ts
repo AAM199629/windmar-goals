@@ -6,6 +6,7 @@ import { PREMIO_PIPELINES, PLINKO_PIPELINES, ACTIVE_DEAL_SQL } from '@/lib/confi
 // vendedor en un periodo dado. Ruleta (mes) = Solar + Roofing; Plinko (semana)
 // = Solar + Roofing + Anker + Water (estos últimos a ½ pto).
 export interface DealDetail {
+  caseNumber:       string | null   // número de caso (dim_profiles.case_number)
   closingDate:      string | null
   pipeline:         string | null
   amount:           number | null
@@ -20,6 +21,7 @@ export interface DealsResponse {
 }
 
 interface DealRow {
+  case_number:    string | null
   closing_date:   string | null
   pipeline:       string | null
   amount:         string | number | null
@@ -47,6 +49,7 @@ export async function GET(req: Request) {
 
     const rows = await query<DealRow>(`
       SELECT
+        COALESCE(dp.case_number, dp.case_number_2) AS case_number,
         TO_CHAR(fd.closing_date, 'YYYY-MM-DD') AS closing_date,
         dp.pipeline            AS pipeline,
         fd.amount              AS amount,
@@ -60,7 +63,7 @@ export async function GET(req: Request) {
       JOIN dwh.dim_staff ds
         ON ds.id_staff = fd.id_staff AND ds.is_current = true
       LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+        ON stm.member_id = ds.sales_rep
       WHERE fd.closing_date >= $2
         AND fd.closing_date <= $3
         AND fd.closing_date IS NOT NULL
@@ -71,6 +74,7 @@ export async function GET(req: Request) {
     `, [zohoId, start, end])
 
     const deals: DealDetail[] = rows.map(r => ({
+      caseNumber:   r.case_number && String(r.case_number).trim() !== '' ? String(r.case_number).trim() : null,
       closingDate:  r.closing_date ? String(r.closing_date).slice(0, 10) : null,
       pipeline:     r.pipeline,
       amount:       r.amount != null ? Number(r.amount) : null,

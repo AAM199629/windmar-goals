@@ -116,7 +116,7 @@ function buildFetcher(month: string) {
           JOIN dwh.dim_staff ds
             ON ds.id_staff = fd.id_staff AND ds.is_current = true
           LEFT JOIN dw_zoho.dim_sales_team_member stm
-            ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+            ON stm.member_id = ds.sales_rep
           WHERE fd.closing_date >= $1
             AND fd.closing_date <= $2
             AND fd.closing_date IS NOT NULL
@@ -140,7 +140,7 @@ function buildFetcher(month: string) {
           JOIN dwh.dim_staff ds
             ON ds.id_staff = fd.id_staff AND ds.is_current = true
           LEFT JOIN dw_zoho.dim_sales_team_member stm
-            ON LOWER(stm.email) = LOWER(ds.sale_rep_email)
+            ON stm.member_id = ds.sales_rep
           WHERE fd.closing_date >= $1
             AND fd.closing_date <= $2
             AND fd.closing_date IS NOT NULL
