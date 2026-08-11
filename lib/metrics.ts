@@ -39,11 +39,11 @@ export interface RepMember {
   email:                string
   status:               string | null
   sales_role:           string | null
+  // La jerarquía se recorre SOLO por sponsor_id (member_id del reclutador).
+  // Las columnas upline_level_1–4 de dim_sales_team_member existen pero guardan
+  // NOMBRES, no member_id — no las expongas aquí: usarlas para unir por id daba
+  // 0 matches y dejaba las ventas de equipo en 0 para todos.
   sponsor_id:           string | null
-  upline_level_1:       string | null
-  upline_level_2:       string | null
-  upline_level_3:       string | null
-  upline_level_4:       string | null
   consultor_start_date: string | null
   lider_start_date:     string | null
   gerente_start_date:   string | null
