@@ -191,6 +191,12 @@ export const COMPTESLA_MIN_VENTAS = 10  // requisito mínimo para clasificar
 // (evita acentos y segundos apellidos). Comentario = nombre de la hoja → nombre en BD.
 // Para actualizar la lista, reconciliar los nombres nuevos contra Redshift y añadir
 // su member_id aquí. Ver [[competencia-tesla]].
+//
+// Revisión ago 2026 (el rol/status en el warehouse cambia después de reconciliar,
+// así que el set se desfasa de la hoja): Johnnathan Perez Ruiz pasó de Consultor a
+// Empleado - Lider → añadido (como consultor competía sin estar en el set, como
+// líder habría perdido la tarjeta). Rosalisse Torres volvió a Activo → añadida.
+// Brian Mangual Sanchez renunció → quitado.
 export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
   '4258103000030093001', // Merari Velazquez → Merari Velazquez Aldarondo
   '4258103000319926145', // Wilson Morales → Wilson Morales Ruiz
@@ -215,7 +221,6 @@ export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
   '4258103000058172003', // Victor Sarriera → Victor Daniel Sarriera Morales
   '4258103000424185134', // Yaritza Villoch → Yaritza Villoch Tirado
   '4258103000000711050', // Kenneth La Quay → Kenneth La Quay
-  '4258103000000711133', // Brian Mangual → Brian Mangual Sanchez
   '4258103000000711078', // Emmanuel Ortiz → Emmanuel Ortiz De Jesus
   '4258103000046246223', // Joel Muniz → Joel Enrique Muniz Aybar
   '4258103000591573726', // Michelle Saez → Michelle Marie Saez Pabon
@@ -256,6 +261,8 @@ export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
   '4258103000000711059', // Joselyne Soto → Joselyne Soto Gonzalez
   '4258103000744329794', // Alex S. Rios → Alex Samuel Rios Ethna
   '4258103000096372924', // Angel Gonzalez → Angel Francisco Gonzalez Ramos
+  '4258103000468695900', // Jonathan Perez → Johnnathan Perez Ruiz (ahora Empleado - Lider)
+  '4258103000003350227', // Rosalisse Torres → Rosalisse Torres (reactivada)
 ])
 
 // Gate de participación en la Competencia Tesla. Consultores: todos compiten.
