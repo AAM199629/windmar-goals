@@ -161,6 +161,11 @@ export default function TeslaLeaderboardClient() {
               fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase',
               color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
             }}>Crucero →</a>
+            <a href="/leaderboard-lideres" style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 700,
+              fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+            }}>Competencia Líderes →</a>
             <a href="/plinko-ruleta" style={{
               fontFamily: 'var(--font-cond)', fontWeight: 700,
               fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase',

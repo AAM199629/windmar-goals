@@ -67,6 +67,24 @@ export async function getGerenteAccionistaRankings(): Promise<GerenteAccionistaR
   return redis.get<GerenteAccionistaRankEntry[]>(`${PREFIX}:gerentea:rankings`)
 }
 
+// ── Competencia Líderes: top 15 ────────────────────────────────────────────────
+export interface CLideresRankEntry {
+  zohoId:         string
+  name:           string
+  points:         number
+  personalPoints: number
+  traineePoints:  number
+  qualified:      boolean
+}
+
+export async function setCLideresRankings(list: CLideresRankEntry[]): Promise<void> {
+  await redis.set(`${PREFIX}:clideres:rankings`, list, { ex: 60 * 60 * 25 })
+}
+
+export async function getCLideresRankings(): Promise<CLideresRankEntry[] | null> {
+  return redis.get<CLideresRankEntry[]>(`${PREFIX}:clideres:rankings`)
+}
+
 export async function getAllMetrics(): Promise<GoalsMetrics[]> {
   const keys = await getAllMetricKeys()
   if (!keys.length) return []

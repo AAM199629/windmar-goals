@@ -138,7 +138,7 @@ export default function PlinkoRuletaClient() {
           <img src="/windmar-logo-rev.png" alt="Windmar" style={{ height: '2rem', objectFit: 'contain', flexShrink: 0 }} />
           <span style={{ background: 'var(--orange)', color: '#fff', fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.58rem', letterSpacing: '0.22em', textTransform: 'uppercase', padding: '0.22rem 0.7rem', borderRadius: 3 }}>PREMIACIONES</span>
           <nav style={{ marginLeft: 'auto', display: 'flex', gap: '1.25rem' }}>
-            {[['/leaderboard', 'Crucero →'], ['/leaderboard-tesla', 'Competencia Tesla →'], ['/search', 'Buscar vendedor →']].map(([href, txt]) => (
+            {[['/leaderboard', 'Crucero →'], ['/leaderboard-tesla', 'Competencia Tesla →'], ['/leaderboard-lideres', 'Competencia Líderes →'], ['/search', 'Buscar vendedor →']].map(([href, txt]) => (
               <a key={href} href={href} style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>{txt}</a>
             ))}
           </nav>

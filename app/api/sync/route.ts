@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, type ComptesaRankings, type GerenteAccionistaRankEntry } from '@/lib/kv'
+import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
 import type { MemberEntry } from '@/lib/kv'
 
 function currentYYYYMM() {
@@ -301,6 +301,53 @@ async function runSync(month: string) {
       GROUP BY stm_mentor.member_id
     `, [COMPTESLA_START, COMPTESLA_END])
 
+    // ── 8d. Competencia Líderes: ventas personales por pipeline (01 ago – 31 dic) ─
+    const lideresRows = await query<PipelineRow>(`
+      SELECT stm.member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_profiles dp
+        ON dp.id_profile = fd.id_profile
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm
+        ON stm.member_id = ds.sales_rep
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND ${ACTIVE_DEAL_SQL}
+        AND stm.member_id IS NOT NULL
+      GROUP BY stm.member_id, LOWER(dp.pipeline)
+    `, [CLIDERES_START, CLIDERES_END])
+
+    // ── 8e. Competencia Líderes: ventas de trainee (1ª–4ª) POR PIPELINE ─────────
+    // A diferencia de la asistida del crucero (conteo plano × 0.5), aquí la venta
+    // del trainee se pondera por producto igual que la personal, así que hace falta
+    // el desglose por pipeline. El mentor es el sponsor_id del trainee.
+    // Se alias-ea mentor_id AS member_id para poder reusar toPipelineMap().
+    const lideresTraineeRows = await query<PipelineRow>(`
+      SELECT stm_mentor.member_id AS member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_profiles dp
+        ON dp.id_profile = fd.id_profile
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm_trainee
+        ON stm_trainee.member_id = ds.sales_rep
+      LEFT JOIN dw_zoho.dim_sales_team_member stm_mentor
+        ON stm_mentor.member_id = stm_trainee.sponsor_id
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND ${ACTIVE_DEAL_SQL}
+        AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
+        AND stm_mentor.member_id IS NOT NULL
+      GROUP BY stm_mentor.member_id, LOWER(dp.pipeline)
+    `, [CLIDERES_START, CLIDERES_END])
+
     const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }> = {}
     for (const r of teslaCompRows) {
       if (!r.member_id) continue
@@ -324,6 +371,8 @@ async function runSync(month: string) {
     const cruisePipelineMap   = toPipelineMap(personalCruiseRows)
     const weeklyPipelineMap   = toPipelineMap(weeklyPipelineRows)
     const monthlyPipelineMap  = toPipelineMap(monthlyPipelineRows)
+    const lideresMap          = toPipelineMap(lideresRows)
+    const lideresTraineeMap   = toPipelineMap(lideresTraineeRows)
 
     const monthlyMap: Record<string, number> = {}
     for (const r of monthlyRows) {
@@ -350,6 +399,7 @@ async function runSync(month: string) {
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
     const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number }> = []
     const gerentea: GerenteAccionistaRankEntry[] = []
+    const clideres: CLideresRankEntry[] = []
 
     await Promise.all(
       members.map(async (member) => {
@@ -366,6 +416,8 @@ async function runSync(month: string) {
             weeklyPipelines:   weeklyPipelineMap[member.member_id]     ?? {},
             monthlyPipelines:  monthlyPipelineMap[member.member_id]    ?? {},
             teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 },
+            lideresCounts:        lideresMap[member.member_id]         ?? {},
+            lideresTraineeCounts: lideresTraineeMap[member.member_id]  ?? {},
             currentMonth:      month,
             weekStart:         monday,
             cruiseStart:       CRUISE_START,
@@ -395,6 +447,17 @@ async function runSync(month: string) {
               primaryDone: ga.primary.done,
             })
           }
+          if (metrics.competenciaLideres) {
+            const cl = metrics.competenciaLideres
+            clideres.push({
+              zohoId:         member.member_id,
+              name:           member.full_name,
+              points:         cl.points,
+              personalPoints: cl.personalPoints,
+              traineePoints:  cl.traineePoints,
+              qualified:      cl.qualified,
+            })
+          }
           results.push({ zohoId: member.member_id, name: member.full_name, ok: true })
         } catch (e) {
           results.push({ zohoId: member.member_id, name: member.full_name, ok: false, error: String(e) })
@@ -416,6 +479,10 @@ async function runSync(month: string) {
     // ── 10c. Gerente Accionista: top 10 gerentes (orden por pts de desarrollo) ─
     gerentea.sort((a, b) => b.devPoints - a.devPoints || b.salesPoints - a.salesPoints)
     await setGerenteAccionistaRankings(gerentea.slice(0, 10))
+
+    // ── 10d. Competencia Líderes: top 15 por puntos (solo líderes) ─────────────
+    clideres.sort((a, b) => b.points - a.points)
+    await setCLideresRankings(clideres.slice(0, CLIDERES_TOP_N))
 
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length

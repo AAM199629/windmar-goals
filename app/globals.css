@@ -100,6 +100,29 @@
   line-height: 1.1;
 }
 
+/* Sello de frescura del snapshot (bajo el header) */
+.dashboard-stamp {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 2.5rem;
+  background: rgba(10, 26, 74, 0.04);
+  border-bottom: 1px solid rgba(10, 26, 74, 0.07);
+  font-family: var(--font-cond);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray);
+}
+
+.stamp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+  flex-shrink: 0;
+}
+
 /* ══════════════════════════════════════════════════════
    PAGE BODY
 ══════════════════════════════════════════════════════ */
@@ -487,6 +510,7 @@
 @media (max-width: 768px) {
   .dashboard-header { padding: 0 1.25rem; height: 60px; }
   .header-name { font-size: 1.35rem; }
+  .dashboard-stamp { padding: 0.5rem 1rem; font-size: 0.62rem; letter-spacing: 0.05em; }
   .cards-grid, .detail-section { padding: 0 1rem; gap: 1rem; }
   .goal-card { width: 100%; min-height: 320px; }
   .section-eyebrow { padding: 1.25rem 1rem 0.5rem; }

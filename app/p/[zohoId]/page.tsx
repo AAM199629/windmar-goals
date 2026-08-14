@@ -1,8 +1,8 @@
 import GoalCard from '@/components/GoalCard'
 import PromotorDashboardClient from '@/components/PromotorDashboardClient'
-import { getMetrics, getComptesaRankings, getGerenteAccionistaRankings } from '@/lib/kv'
+import { getMetrics, getComptesaRankings, getGerenteAccionistaRankings, getCLideresRankings } from '@/lib/kv'
 import { query } from '@/lib/redshift'
-import { GRAD_POINTS, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, isPromotor } from '@/lib/config'
+import { GRAD_POINTS, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, CLIDERES_MIN_POINTS, CLIDERES_TOP_N, CLIDERES_PRIZES, isPromotor } from '@/lib/config'
 
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
 
@@ -98,6 +98,44 @@ sobre el Secundario. Solo cuentan promociones
 de 1ª línea; transferidos no aplican.`
 }
 
+function money(n: number): string {
+  return `$${n.toLocaleString('en-US')}`
+}
+
+function competenciaLideresRules(): string {
+  const premios = CLIDERES_PRIZES
+    .map((p, i) => `  ${String(i + 1).padStart(2, ' ')}° ${money(p)}`)
+    .join('\n')
+
+  return `01 agosto – 31 diciembre 2026
+(fecha de corte: 06 enero 2027)
+
+Competencia individual entre líderes.
+$50,000 repartidos en el TOP ${CLIDERES_TOP_N}.
+
+Puntos por venta — tu venta y la de tu
+trainee valen exactamente lo mismo:
+  • Solar: 1 pt
+  • Roofing: 1 pt
+  • Water: ½ pt
+  • Anker: ½ pt
+
+Venta de trainee = las 4 primeras ventas
+de un trainee de tu línea directa.
+
+Requisito:
+  • Mínimo ${CLIDERES_MIN_POINTS} puntos en el periodo
+    para poder calificar como ganador
+
+PREMIOS
+${premios}
+  TOTAL $50,000
+
+Solo cuentan ventas netas (documentos
+completos y al día). Confírmalo con las
+asistentes de documentos.`
+}
+
 function rankBadge(rank: number): string {
   if (rank === 1) return '🥇'
   if (rank === 2) return '🥈'
@@ -146,6 +184,7 @@ export default async function DashboardPage({
   const graduacion = metrics.graduacion
   const competenciaTesla = metrics.competenciaTesla
   const gerenteAccionista = metrics.gerenteAccionista
+  const competenciaLideres = metrics.competenciaLideres
 
   // Top 10 por rol para la Competencia Tesla (idéntico para todos los del mismo rol)
   const myRole   = plinko?.role ?? 'trainee'
@@ -154,6 +193,9 @@ export default async function DashboardPage({
 
   // Ranking de gerentes para la tarjeta Gerente Accionista
   const gaRanking = gerenteAccionista ? (await getGerenteAccionistaRankings() ?? []) : []
+
+  // Top 15 de la Competencia Líderes (idéntico para todos los líderes)
+  const clRanking = competenciaLideres ? (await getCLideresRankings() ?? []) : []
 
   // Guard: old KV records may be missing new fields entirely
   if (!plinko || !graduacion) {
@@ -167,6 +209,15 @@ export default async function DashboardPage({
       </main>
     )
   }
+
+  // Sello de frescura: las tarjetas leen el snapshot de KV que escribe el sync
+  // (cada hora), mientras el leaderboard consulta Redshift en vivo. Mostrar la
+  // hora del snapshot arriba hace explícito ese desfase en vez de parecer un
+  // descuadre de datos.
+  const stamp = new Date(metrics.updatedAt).toLocaleString('es-PR', {
+    timeZone: 'America/Puerto_Rico',
+    day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+  })
 
   const cbd = cruise.breakdown ?? {} as any
   const cruiseSublabel = (
@@ -186,6 +237,11 @@ export default async function DashboardPage({
           <span className="header-name">{metrics.name}</span>
         </div>
       </header>
+
+      <div className="dashboard-stamp">
+        <span className="stamp-dot" />
+        Datos al {stamp} · se actualizan cada hora
+      </div>
 
       {/* Cards grid — main goals */}
       <div className="section-eyebrow">01 — Progreso de Metas</div>
@@ -241,6 +297,20 @@ export default async function DashboardPage({
             gradient="linear-gradient(155deg, #1a1408 0%, #3a2c10 45%, #8a6a1e 100%)"
             progressIcon="👔"
             rules={gerenteAccionistaRules()}
+          />
+        )}
+
+        {competenciaLideres && (
+          <GoalCard
+            title="COMPETENCIA LÍDERES"
+            current={Number(competenciaLideres.points.toFixed(1))}
+            target={competenciaLideres.minPoints}
+            label={`${competenciaLideres.minPoints} pts mínimo`}
+            sublabel={`01 ago – 31 dic 2026 · Top ${CLIDERES_TOP_N} · $50,000`}
+            gradient="linear-gradient(155deg, #08251A 0%, #10502F 45%, #C9A227 100%)"
+            unit="pts"
+            progressIcon="🏅"
+            rules={competenciaLideresRules()}
           />
         )}
 
@@ -431,6 +501,106 @@ export default async function DashboardPage({
           </div>
         )}
 
+        {competenciaLideres && (
+          <div className="detail-card">
+            <h3>Competencia Líderes — Desglose</h3>
+
+            <div style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+              letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+              marginBottom: '0.5rem',
+            }}>
+              Tus ventas
+            </div>
+            <dl>
+              <dt>Solar</dt><dd>{competenciaLideres.breakdown.solar.toFixed(1)}</dd>
+              <dt>Roofing</dt><dd>{competenciaLideres.breakdown.roofing.toFixed(1)}</dd>
+              <dt>Agua</dt><dd>{competenciaLideres.breakdown.water.toFixed(1)}</dd>
+              <dt>Anker (PPS)</dt><dd>{competenciaLideres.breakdown.pps.toFixed(1)}</dd>
+              <dt>Subtotal</dt><dd>{competenciaLideres.personalPoints.toFixed(1)} pts</dd>
+            </dl>
+
+            <div style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+              letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+              margin: '0.9rem 0 0.5rem',
+            }}>
+              Ventas de tus trainees (1ª–4ª)
+            </div>
+            <dl>
+              <dt>Solar</dt><dd>{competenciaLideres.traineeBreakdown.solar.toFixed(1)}</dd>
+              <dt>Roofing</dt><dd>{competenciaLideres.traineeBreakdown.roofing.toFixed(1)}</dd>
+              <dt>Agua</dt><dd>{competenciaLideres.traineeBreakdown.water.toFixed(1)}</dd>
+              <dt>Anker (PPS)</dt><dd>{competenciaLideres.traineeBreakdown.pps.toFixed(1)}</dd>
+              <dt>Subtotal</dt><dd>{competenciaLideres.traineePoints.toFixed(1)} pts</dd>
+            </dl>
+
+            <dl style={{ marginTop: '0.9rem' }}>
+              <dt>Total puntos</dt>
+              <dd className="highlight">
+                {competenciaLideres.points.toFixed(1)} / {competenciaLideres.minPoints} pts mínimo
+                {competenciaLideres.qualified && ' ✓'}
+              </dd>
+            </dl>
+
+            {/* Top 15 */}
+            <div style={{ marginTop: '1rem', borderTop: '1px solid #edf0f8', paddingTop: '0.85rem' }}>
+              <div style={{
+                fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+                letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+                marginBottom: '0.6rem',
+              }}>
+                Top {CLIDERES_TOP_N} — Líderes
+              </div>
+
+              {clRanking.length === 0 ? (
+                <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.8rem', color: 'var(--gray)', margin: 0 }}>
+                  Ranking disponible tras el próximo sync.
+                </p>
+              ) : (
+                <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {clRanking.map((r, i) => {
+                    const isMe = r.zohoId === metrics.zohoId
+                    return (
+                      <li key={r.zohoId} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        padding: '0.4rem 0.45rem', borderRadius: 7,
+                        background: isMe ? 'rgba(245,166,35,0.14)' : i % 2 === 0 ? '#fafbff' : 'transparent',
+                        border: isMe ? '1px solid rgba(245,166,35,0.45)' : '1px solid transparent',
+                      }}>
+                        <span style={{
+                          width: '1.3rem', textAlign: 'center', flexShrink: 0,
+                          fontFamily: i < 3 ? 'inherit' : 'var(--font-bebas)',
+                          fontSize: i < 3 ? '1rem' : '0.85rem', color: 'var(--gray)',
+                        }}>{rankBadge(i + 1)}</span>
+                        <a href={`/p/${r.zohoId}`} style={{
+                          flex: 1, minWidth: 0, fontFamily: 'var(--font-body)', fontWeight: isMe ? 700 : 500,
+                          fontSize: '0.82rem', color: 'var(--navy)', textDecoration: 'none',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>{r.name}{isMe && ' (tú)'}</a>
+                        {/* Premio de la posición. Se muestra siempre para que se vea qué
+                            está en juego, pero atenuado hasta llegar al mínimo de puntos:
+                            sin los 9 pts no se puede cobrar aunque se esté en el top 15. */}
+                        <span
+                          title={r.qualified ? 'Clasificado' : `Necesita ${CLIDERES_MIN_POINTS} pts para clasificar`}
+                          style={{
+                            flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                            fontSize: '0.66rem', color: r.qualified ? '#1a7f4b' : '#c3cad8',
+                          }}
+                        >{money(CLIDERES_PRIZES[i] ?? 0)}</span>
+                        <span style={{
+                          flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                          fontSize: '0.8rem', color: 'var(--orange)', minWidth: '3rem', textAlign: 'right',
+                        }}>{r.points.toFixed(1)}</span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="detail-card">
           <h3>Meta Mensual</h3>
           {(() => {
@@ -600,6 +770,7 @@ Tu progreso:
 
       <footer className="dashboard-footer">
         Actualizado: {new Date(metrics.updatedAt).toLocaleString('es-PR', { timeZone: 'America/Puerto_Rico' })}
+        {' · '}Las ventas cerradas después de esa hora aparecen en el próximo sync
       </footer>
     </main>
   )
