@@ -263,6 +263,7 @@ export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
   '4258103000096372924', // Angel Gonzalez → Angel Francisco Gonzalez Ramos
   '4258103000468695900', // Jonathan Perez → Johnnathan Perez Ruiz (ahora Empleado - Lider)
   '4258103000003350227', // Rosalisse Torres → Rosalisse Torres (reactivada)
+  '4258103000434527526', // Raiza Albino → Raiza Albino Mattei (Lider)
 ])
 
 // Gate de participación en la Competencia Tesla. Consultores: todos compiten.
@@ -293,3 +294,44 @@ export const GERENTEA_SALES_POINTS: Record<string, number> = {
 }
 export const GERENTEA_ASISTIDA_POINTS = 1  // venta asistida (1ª–4ª venta del trainee → mentor)
 export const GERENTEA_SALES_TARGET    = 40
+
+// ── Competencia Líderes 2026 (01 ago – 31 dic 2026; corte 06 ene 2027) ─────────
+// Comunicado "Competencia Lideres 2026" (José Alicea, VP de Ventas, 08/01/2026):
+// $50,000 repartidos entre los 15 líderes con más puntos al cierre.
+export const CLIDERES_START  = process.env.CLIDERES_START_DATE ?? '2026-08-01'
+export const CLIDERES_END    = process.env.CLIDERES_END_DATE   ?? '2026-12-31'
+// Fecha de corte: los deals cerrados dentro de la ventana siguen entrando al conteo
+// hasta esta fecha mientras se completan documentos. No amplía la ventana de cierre.
+export const CLIDERES_CUTOFF = '2027-01-06'
+
+// La venta del trainee vale EXACTAMENTE lo mismo que la personal (así lo dice el
+// comunicado), por eso una sola tabla de puntos sirve para las dos mitades.
+export const CLIDERES_POINTS: Record<string, number> = {
+  'residential solar': 1,
+  'commercial solar':  1,
+  'roofing':           1,
+  'water products':    0.5,
+  'pps':               0.5,
+}
+
+export const CLIDERES_MIN_POINTS = 9   // mínimo para poder calificar como ganador
+
+// Premios por posición (índice 0 = 1er lugar). Total: $50,000.
+export const CLIDERES_PRIZES = [
+  10000, 8000, 6500, 5250, 4250, 3500, 2750, 2250,
+  1750, 1500, 1250, 1000, 800, 700, 500,
+]
+
+// Ganan los 15 primeros. Se deriva de la tabla de premios para que no se
+// desincronicen si el año que viene cambia la cantidad de posiciones premiadas.
+export const CLIDERES_TOP_N = CLIDERES_PRIZES.length
+
+// Participan TODOS los líderes activos (Lider y Empleado - Lider). A diferencia de
+// la Competencia Tesla no hay allow-list: el comunicado dice "todo líder activo".
+// El filtro de activo (check `Inactive` sin marcar) ya lo aplican el sync y el
+// leaderboard al seleccionar miembros.
+export function isCLideresParticipant(
+  role: 'trainee' | 'consultor' | 'lider' | 'gerente',
+): boolean {
+  return role === 'lider'
+}

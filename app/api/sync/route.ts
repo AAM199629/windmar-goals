@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, type ComptesaRankings, type GerenteAccionistaRankEntry } from '@/lib/kv'
+import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
 import type { MemberEntry } from '@/lib/kv'
 
 function currentYYYYMM() {
@@ -58,6 +58,38 @@ function toPipelineMap(rows: PipelineRow[]): Record<string, PipelineCounts> {
   return map
 }
 
+// Meta Tesla Model Y: las ventas del equipo cuentan hasta 4 líneas de profundidad.
+const TEAM_LEVELS = 4
+
+// Reparte los conteos personales de cada vendedor entre sus uplines (hasta
+// TEAM_LEVELS niveles), subiendo por la cadena de sponsor_id.
+//
+// OJO: `upline_level_1–4` de dim_sales_team_member NO sirven para esto — guardan
+// el NOMBRE del upline ('Kenneth La Quay'), no su member_id. Agrupar por esas
+// columnas y luego buscar por member_id daba 0 matches, así que el equipo salía
+// en 0 para TODOS. `sponsor_id` sí es un member_id real.
+function buildTeamMap(
+  personal:  Record<string, PipelineCounts>,
+  sponsorOf: Record<string, string>,
+): Record<string, PipelineCounts> {
+  const team: Record<string, PipelineCounts> = {}
+  for (const [sellerId, counts] of Object.entries(personal)) {
+    let current = sellerId
+    const seen  = new Set([sellerId])  // corta ciclos en sponsor_id
+    for (let level = 0; level < TEAM_LEVELS; level++) {
+      const upline = sponsorOf[current]
+      if (!upline || seen.has(upline)) break
+      seen.add(upline)
+      const bucket = (team[upline] ??= {})
+      for (const [pipeline, n] of Object.entries(counts)) {
+        bucket[pipeline] = (bucket[pipeline] ?? 0) + n
+      }
+      current = upline
+    }
+  }
+  return team
+}
+
 async function runSync(month: string) {
     const { first, last } = monthRange(month)
     const { monday, sunday } = currentWeekRange()
@@ -67,7 +99,6 @@ async function runSync(month: string) {
       SELECT
         member_id, full_name, email, status, sales_role,
         sponsor_id,
-        upline_level_1, upline_level_2, upline_level_3, upline_level_4,
         consultor_start_date, lider_start_date, gerente_start_date
       FROM dw_zoho.dim_sales_team_member
       WHERE (inactive IS NULL OR inactive = '' OR LOWER(inactive) = 'false')
@@ -78,6 +109,21 @@ async function runSync(month: string) {
 
     if (members.length === 0) {
       throw new Error('No team members found in dw_zoho.dim_sales_team_member')
+    }
+
+    // ── 1b. Genealogía completa (member_id → sponsor_id) ───────────────────────
+    // SIN filtros de rol ni de estado, a propósito: la cadena de upline tiene que
+    // poder atravesar trainees, promotores e inactivos. Si se cortara en ellos se
+    // perdería toda su descendencia (p. ej. las líneas 3 y 4 que cuelgan de un
+    // trainee). Solo se usa para armar el árbol, no para mostrar a nadie.
+    const genealogyRows = await query<{ member_id: string; sponsor_id: string | null }>(`
+      SELECT member_id, sponsor_id
+      FROM dw_zoho.dim_sales_team_member
+      WHERE member_id IS NOT NULL
+    `)
+    const sponsorOf: Record<string, string> = {}
+    for (const g of genealogyRows) {
+      if (g.sponsor_id) sponsorOf[g.member_id] = g.sponsor_id
     }
 
     // ── 2. Personal deal counts by pipeline for Tesla period ──────────────────
@@ -100,34 +146,10 @@ async function runSync(month: string) {
       GROUP BY stm.member_id, LOWER(dp.pipeline)
     `, [TESLA_START, TESLA_END])
 
-    // ── 3. Team deal counts by pipeline for Tesla period (all uplines at once) ─
-    const teamTeslaRows = await query<PipelineRow & { upline_id: string }>(`
-      SELECT team_map.upline_id AS member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
-      FROM dwh.fact_deals fd
-      JOIN dwh.dim_profiles dp
-        ON dp.id_profile = fd.id_profile
-      JOIN dwh.dim_status_reason dsr
-        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
-      JOIN dwh.dim_staff ds
-        ON ds.id_staff = fd.id_staff AND ds.is_current = true
-      LEFT JOIN dw_zoho.dim_sales_team_member stm
-        ON stm.member_id = ds.sales_rep
-      JOIN (
-        SELECT member_id, upline_level_1 AS upline_id FROM dw_zoho.dim_sales_team_member WHERE upline_level_1 IS NOT NULL
-        UNION ALL
-        SELECT member_id, upline_level_2 FROM dw_zoho.dim_sales_team_member WHERE upline_level_2 IS NOT NULL
-        UNION ALL
-        SELECT member_id, upline_level_3 FROM dw_zoho.dim_sales_team_member WHERE upline_level_3 IS NOT NULL
-        UNION ALL
-        SELECT member_id, upline_level_4 FROM dw_zoho.dim_sales_team_member WHERE upline_level_4 IS NOT NULL
-      ) team_map ON team_map.member_id = stm.member_id
-      WHERE fd.closing_date >= $1
-        AND fd.closing_date <= $2
-        AND fd.closing_date IS NOT NULL
-        AND ${ACTIVE_DEAL_SQL}
-        AND stm.member_id IS NOT NULL
-      GROUP BY team_map.upline_id, LOWER(dp.pipeline)
-    `, [TESLA_START, TESLA_END])
+    // ── 3. (eliminada) Las ventas de equipo ya no se piden a Redshift: se derivan
+    // en memoria de los conteos personales (bloque 2) subiendo por `sponsorOf`.
+    // Ver buildTeamMap(); el bloque 2 incluye a TODOS los que vendieron (sin filtro
+    // de rol), que es justo lo que hay que repartir entre los uplines.
 
     // ── 4. Personal deal counts by pipeline for Cruise period ─────────────────
     const personalCruiseRows = await query<PipelineRow>(`
@@ -279,6 +301,53 @@ async function runSync(month: string) {
       GROUP BY stm_mentor.member_id
     `, [COMPTESLA_START, COMPTESLA_END])
 
+    // ── 8d. Competencia Líderes: ventas personales por pipeline (01 ago – 31 dic) ─
+    const lideresRows = await query<PipelineRow>(`
+      SELECT stm.member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_profiles dp
+        ON dp.id_profile = fd.id_profile
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm
+        ON stm.member_id = ds.sales_rep
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND ${ACTIVE_DEAL_SQL}
+        AND stm.member_id IS NOT NULL
+      GROUP BY stm.member_id, LOWER(dp.pipeline)
+    `, [CLIDERES_START, CLIDERES_END])
+
+    // ── 8e. Competencia Líderes: ventas de trainee (1ª–4ª) POR PIPELINE ─────────
+    // A diferencia de la asistida del crucero (conteo plano × 0.5), aquí la venta
+    // del trainee se pondera por producto igual que la personal, así que hace falta
+    // el desglose por pipeline. El mentor es el sponsor_id del trainee.
+    // Se alias-ea mentor_id AS member_id para poder reusar toPipelineMap().
+    const lideresTraineeRows = await query<PipelineRow>(`
+      SELECT stm_mentor.member_id AS member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+      FROM dwh.fact_deals fd
+      JOIN dwh.dim_profiles dp
+        ON dp.id_profile = fd.id_profile
+      JOIN dwh.dim_status_reason dsr
+        ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+      JOIN dwh.dim_staff ds
+        ON ds.id_staff = fd.id_staff AND ds.is_current = true
+      LEFT JOIN dw_zoho.dim_sales_team_member stm_trainee
+        ON stm_trainee.member_id = ds.sales_rep
+      LEFT JOIN dw_zoho.dim_sales_team_member stm_mentor
+        ON stm_mentor.member_id = stm_trainee.sponsor_id
+      WHERE fd.closing_date >= $1
+        AND fd.closing_date <= $2
+        AND fd.closing_date IS NOT NULL
+        AND ${ACTIVE_DEAL_SQL}
+        AND ds.trainee_sales IN ('1st Sale', '2nd Sale', '3rd Sale', '4th Sale')
+        AND stm_mentor.member_id IS NOT NULL
+      GROUP BY stm_mentor.member_id, LOWER(dp.pipeline)
+    `, [CLIDERES_START, CLIDERES_END])
+
     const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }> = {}
     for (const r of teslaCompRows) {
       if (!r.member_id) continue
@@ -298,10 +367,12 @@ async function runSync(month: string) {
 
     // ── 9. Build lookup maps ──────────────────────────────────────────────────
     const teslaPipelineMap    = toPipelineMap(personalTeslaRows)
-    const teamPipelineMap     = toPipelineMap(teamTeslaRows)
+    const teamPipelineMap     = buildTeamMap(teslaPipelineMap, sponsorOf)
     const cruisePipelineMap   = toPipelineMap(personalCruiseRows)
     const weeklyPipelineMap   = toPipelineMap(weeklyPipelineRows)
     const monthlyPipelineMap  = toPipelineMap(monthlyPipelineRows)
+    const lideresMap          = toPipelineMap(lideresRows)
+    const lideresTraineeMap   = toPipelineMap(lideresTraineeRows)
 
     const monthlyMap: Record<string, number> = {}
     for (const r of monthlyRows) {
@@ -313,7 +384,7 @@ async function runSync(month: string) {
       if (r.mentor_id) asistidaMap[r.mentor_id] = Number(r.cnt)
     }
 
-    // Pre-build: sponsor_id is the recruiter's member_id (upline_level_1–4 are null in this dataset)
+    // Pre-build: sponsor_id es el member_id del reclutador (1ª línea directa).
     const directReportsOf: Record<string, RepMember[]> = {}
     for (const m of members) {
       if (m.sponsor_id) {
@@ -328,6 +399,7 @@ async function runSync(month: string) {
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
     const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number }> = []
     const gerentea: GerenteAccionistaRankEntry[] = []
+    const clideres: CLideresRankEntry[] = []
 
     await Promise.all(
       members.map(async (member) => {
@@ -344,6 +416,8 @@ async function runSync(month: string) {
             weeklyPipelines:   weeklyPipelineMap[member.member_id]     ?? {},
             monthlyPipelines:  monthlyPipelineMap[member.member_id]    ?? {},
             teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 },
+            lideresCounts:        lideresMap[member.member_id]         ?? {},
+            lideresTraineeCounts: lideresTraineeMap[member.member_id]  ?? {},
             currentMonth:      month,
             weekStart:         monday,
             cruiseStart:       CRUISE_START,
@@ -373,6 +447,17 @@ async function runSync(month: string) {
               primaryDone: ga.primary.done,
             })
           }
+          if (metrics.competenciaLideres) {
+            const cl = metrics.competenciaLideres
+            clideres.push({
+              zohoId:         member.member_id,
+              name:           member.full_name,
+              points:         cl.points,
+              personalPoints: cl.personalPoints,
+              traineePoints:  cl.traineePoints,
+              qualified:      cl.qualified,
+            })
+          }
           results.push({ zohoId: member.member_id, name: member.full_name, ok: true })
         } catch (e) {
           results.push({ zohoId: member.member_id, name: member.full_name, ok: false, error: String(e) })
@@ -394,6 +479,10 @@ async function runSync(month: string) {
     // ── 10c. Gerente Accionista: top 10 gerentes (orden por pts de desarrollo) ─
     gerentea.sort((a, b) => b.devPoints - a.devPoints || b.salesPoints - a.salesPoints)
     await setGerenteAccionistaRankings(gerentea.slice(0, 10))
+
+    // ── 10d. Competencia Líderes: top 15 por puntos (solo líderes) ─────────────
+    clideres.sort((a, b) => b.points - a.points)
+    await setCLideresRankings(clideres.slice(0, CLIDERES_TOP_N))
 
     const succeeded = results.filter(r => r.ok).length
     const failed    = results.filter(r => !r.ok).length

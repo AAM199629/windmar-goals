@@ -27,6 +27,12 @@ import {
   GERENTEA_SALES_POINTS,
   GERENTEA_ASISTIDA_POINTS,
   GERENTEA_SALES_TARGET,
+  CLIDERES_START,
+  CLIDERES_END,
+  CLIDERES_CUTOFF,
+  CLIDERES_POINTS,
+  CLIDERES_MIN_POINTS,
+  isCLideresParticipant,
 } from './config'
 
 const TEAM_BUILDER_TARGET = 10
@@ -39,11 +45,11 @@ export interface RepMember {
   email:                string
   status:               string | null
   sales_role:           string | null
+  // La jerarquía se recorre SOLO por sponsor_id (member_id del reclutador).
+  // Las columnas upline_level_1–4 de dim_sales_team_member existen pero guardan
+  // NOMBRES, no member_id — no las expongas aquí: usarlas para unir por id daba
+  // 0 matches y dejaba las ventas de equipo en 0 para todos.
   sponsor_id:           string | null
-  upline_level_1:       string | null
-  upline_level_2:       string | null
-  upline_level_3:       string | null
-  upline_level_4:       string | null
   consultor_start_date: string | null
   lider_start_date:     string | null
   gerente_start_date:   string | null
@@ -126,6 +132,27 @@ export interface GerenteAccionistaMetrics {
   end:   string
 }
 
+// Desglose de puntos por producto (mismo shape para ventas personales y de trainee).
+export interface CLideresBreakdown {
+  solar:   number
+  roofing: number
+  water:   number
+  pps:     number
+}
+
+export interface CompetenciaLideresMetrics {
+  points:           number   // personales + trainee → número grande de la tarjeta
+  personalPoints:   number
+  traineePoints:    number
+  minPoints:        number   // mínimo para calificar (9)
+  qualified:        boolean  // points >= minPoints
+  breakdown:        CLideresBreakdown  // puntos de ventas personales
+  traineeBreakdown: CLideresBreakdown  // puntos de ventas de trainee (1ª–4ª)
+  start:            string
+  end:              string
+  cutoff:           string
+}
+
 export interface GoalsMetrics {
   zohoId:  string
   name:    string
@@ -155,6 +182,7 @@ export interface GoalsMetrics {
   teamBuilder: TeamBuilderMetrics | null
   competenciaTesla: CompetenciaTeslaMetrics | null
   gerenteAccionista: GerenteAccionistaMetrics | null
+  competenciaLideres: CompetenciaLideresMetrics | null
   updatedAt:   string
 }
 
@@ -174,6 +202,18 @@ function sumPipelinesFor(counts: PipelineCounts, pipelines: string[]): number {
 // donde Solar + Roofing valen 1 pto y Anker + Water valen ½ pto.
 function sumWeightedPipelines(counts: PipelineCounts, weights: Record<string, number>): number {
   return Object.entries(weights).reduce((acc, [p, w]) => acc + (counts[p] ?? 0) * w, 0)
+}
+
+// Desglose de puntos por producto para la Competencia Líderes. Solar suma las dos
+// variantes (residencial + comercial), que valen lo mismo.
+function calcCLideresBreakdown(counts: PipelineCounts): CLideresBreakdown {
+  return {
+    solar:   ((counts['residential solar'] ?? 0) + (counts['commercial solar'] ?? 0))
+      * CLIDERES_POINTS['residential solar'],
+    roofing: (counts['roofing']        ?? 0) * CLIDERES_POINTS['roofing'],
+    water:   (counts['water products'] ?? 0) * CLIDERES_POINTS['water products'],
+    pps:     (counts['pps']            ?? 0) * CLIDERES_POINTS['pps'],
+  }
 }
 
 function calcCruisePts(counts: PipelineCounts): number {
@@ -213,6 +253,10 @@ export function buildMetrics(params: {
   weeklyPipelines:    PipelineCounts
   monthlyPipelines:   PipelineCounts
   teslaCompCounts:    { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }
+  // Competencia Líderes: ventas propias y ventas de trainee (1ª–4ª), ambas por
+  // pipeline porque aquí la venta del trainee se pondera por producto, no plana.
+  lideresCounts:        PipelineCounts
+  lideresTraineeCounts: PipelineCounts
   currentMonth:       string
   weekStart:          string
   cruiseStart:        string
@@ -221,6 +265,7 @@ export function buildMetrics(params: {
   const {
     member, teslaCounts, teamCounts, cruiseCounts, teamMembers, directLineMembers,
     asistidaCount, monthlyCount, weeklyPipelines, monthlyPipelines, teslaCompCounts,
+    lideresCounts, lideresTraineeCounts,
     currentMonth, weekStart, cruiseStart, cruiseEnd,
   } = params
 
@@ -375,6 +420,32 @@ export function buildMetrics(params: {
     }
   }
 
+  // ── Competencia Líderes (solo líderes: Lider / Empleado - Lider) ─────────────
+  // La venta del trainee (1ª–4ª) vale lo mismo que la personal, ponderada por
+  // producto. Un no-líder recibe `null`: sin tarjeta y fuera del ranking (el sync
+  // solo hace push si competenciaLideres != null).
+  let competenciaLideres: CompetenciaLideresMetrics | null = null
+  if (isCLideresParticipant(role)) {
+    const breakdown        = calcCLideresBreakdown(lideresCounts)
+    const traineeBreakdown = calcCLideresBreakdown(lideresTraineeCounts)
+    const personalPoints   = sumWeightedPipelines(lideresCounts,        CLIDERES_POINTS)
+    const traineePoints    = sumWeightedPipelines(lideresTraineeCounts, CLIDERES_POINTS)
+    const points           = personalPoints + traineePoints
+
+    competenciaLideres = {
+      points,
+      personalPoints,
+      traineePoints,
+      minPoints: CLIDERES_MIN_POINTS,
+      qualified: points >= CLIDERES_MIN_POINTS,
+      breakdown,
+      traineeBreakdown,
+      start:  CLIDERES_START,
+      end:    CLIDERES_END,
+      cutoff: CLIDERES_CUTOFF,
+    }
+  }
+
   // PPS/Anker = 0.5 per sale; all other pipelines = 1
   const weightedMonthly = Object.entries(monthlyPipelines).reduce(
     (acc, [p, cnt]) => acc + cnt * (p === 'pps' ? 0.5 : 1),
@@ -410,6 +481,7 @@ export function buildMetrics(params: {
     teamBuilder,
     competenciaTesla,
     gerenteAccionista,
+    competenciaLideres,
     updatedAt: new Date().toISOString(),
   }
 }
