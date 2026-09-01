@@ -264,6 +264,7 @@ export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
   '4258103000468695900', // Jonathan Perez → Johnnathan Perez Ruiz (ahora Empleado - Lider)
   '4258103000003350227', // Rosalisse Torres → Rosalisse Torres (reactivada)
   '4258103000434527526', // Raiza Albino → Raiza Albino Mattei (Lider)
+  '4258103000420825369', // Cynthia Rivera → Cinthia Rivera Pagan (Empleado - Lider; se llama 'Cinthia' con i en la BD)
 ])
 
 // Gate de participación en la Competencia Tesla. Consultores: todos compiten.
