@@ -166,6 +166,19 @@ Total crucero = pts ventas personales + pts asistidas + pts graduaciones de 1ª 
 ritmo desde su fecha de rol más temprana en vez de desde el 1 de enero, para no penalizarlo
 por los meses en que no estaba.
 
+**Top 15 en la tarjeta:** la tarjeta "Crucero — Puntos" de `/p/{zohoId}` muestra el top 15
+general de la competencia. Es **un solo ranking para todos los vendedores activos**, no se
+divide por rol (a diferencia del top 10 de la Competencia Tesla), porque la meta de 70 pts
+es la misma para todo el mundo. Estar en el top 15 **no** es lo que da el viaje: al crucero
+se va llegando a los 70 pts, así que en la lista se marca con ✓ a quien ya clasificó.
+Empates: se desempata por puntos personales y luego por nombre. El ranking sale del snapshot
+del sync (cada hora), igual que el resto de las tarjetas.
+
+**Tu posición:** además del top 15, la tarjeta muestra el puesto propio dentro del **roster
+completo** (`Posición: #30 de 412`) y los puntos que faltan para los 70. Si estás fuera del
+top 15, tu fila se engancha al final de la lista con tu puesto real, para que no te quedes
+sin referencia. El puesto se calcula sobre el mismo orden del top 15 (mismos desempates).
+
 ---
 
 ## Parte 2 — Competencia Tesla (el viaje)

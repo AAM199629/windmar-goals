@@ -22,6 +22,12 @@ export const TESLA_END   = process.env.TESLA_END_DATE   ?? _tesla.end
 export const CRUISE_START = '2026-01-01'
 export const CRUISE_END   = '2026-12-31'
 
+// Cuántos puestos muestra el mini-leaderboard del crucero en la tarjeta de
+// /p/[zohoId]. A diferencia de la Competencia Tesla (top 10 POR ROL) aquí es un
+// solo ranking para todos los vendedores activos: la meta de 70 pts es la misma
+// para todo el mundo, así que dividir por rol no aplica.
+export const CRUISE_TOP_N = 15
+
 // Deals excluidos de TODA métrica de competencia: cancelados + en hold.
 // on_hold_status vive en dwh.dim_status_reason (alias `dsr` en todas las queries);
 // es NULL para deals activos y cualquier valor no-nulo es un estado "On Hold - ...".
