@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics, setMembersList, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
+import { setMetrics, setMembersList, setCruiseRankings, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type CruiseRankEntry, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, COMPTESLA_START, COMPTESLA_END, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, CRUISE_TARGET, CRUISE_TOP_N, COMPTESLA_START, COMPTESLA_END, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
 import type { MemberEntry } from '@/lib/kv'
 
 function currentYYYYMM() {
@@ -397,6 +397,7 @@ async function runSync(month: string) {
 
     // ── 10. Build and persist metrics for each member ─────────────────────────
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
+    const cruiseRank: CruiseRankEntry[] = []
     const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number }> = []
     const gerentea: GerenteAccionistaRankEntry[] = []
     const clideres: CLideresRankEntry[] = []
@@ -425,6 +426,15 @@ async function runSync(month: string) {
           })
 
           await setMetrics(member.member_id, metrics)
+          // Crucero: participan TODOS los vendedores activos, sin filtro de rol
+          // ni lista, así que se empuja a cada miembro que se sincroniza bien.
+          cruiseRank.push({
+            zohoId:    member.member_id,
+            name:      member.full_name,
+            total:     metrics.cruise.total,
+            personal:  metrics.cruise.personal,
+            qualified: metrics.cruise.total >= CRUISE_TARGET,
+          })
           if (metrics.competenciaTesla) {
             comptesla.push({
               zohoId: member.member_id,
@@ -464,6 +474,13 @@ async function runSync(month: string) {
         }
       }),
     )
+
+    // ── 10a. Crucero: top 15 general (todos los roles en una sola tabla) ──────
+    // Desempate por puntos personales y luego por nombre, para que el orden no
+    // baile entre syncs cuando dos vendedores están empatados en total.
+    cruiseRank.sort((a, b) =>
+      b.total - a.total || b.personal - a.personal || a.name.localeCompare(b.name))
+    await setCruiseRankings(cruiseRank.slice(0, CRUISE_TOP_N))
 
     // ── 10b. Competencia Tesla: top 10 por rol (trainees NO participan) ────────
     const rankings: ComptesaRankings = {}

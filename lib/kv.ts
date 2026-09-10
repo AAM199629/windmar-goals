@@ -35,6 +35,25 @@ export async function getMembersList(): Promise<MemberEntry[]> {
   return (await redis.get<MemberEntry[]>(`${PREFIX}:members`)) ?? []
 }
 
+// ── Crucero: top 15 general ────────────────────────────────────────────────────
+// Un solo ranking para todos los vendedores activos (sin dividir por rol): la
+// meta de 70 pts es igual para todos. `qualified` = ya llegó a la meta.
+export interface CruiseRankEntry {
+  zohoId:    string
+  name:      string
+  total:     number
+  personal:  number
+  qualified: boolean
+}
+
+export async function setCruiseRankings(list: CruiseRankEntry[]): Promise<void> {
+  await redis.set(`${PREFIX}:cruise:rankings`, list, { ex: 60 * 60 * 25 })
+}
+
+export async function getCruiseRankings(): Promise<CruiseRankEntry[] | null> {
+  return redis.get<CruiseRankEntry[]>(`${PREFIX}:cruise:rankings`)
+}
+
 // ── Competencia Tesla: top 10 por rol ──────────────────────────────────────────
 export interface ComptesaRankEntry { zohoId: string; name: string; points: number; ventas: number }
 export type ComptesaRankings = Record<string, ComptesaRankEntry[]>  // role → top 10

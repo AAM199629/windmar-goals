@@ -1,8 +1,8 @@
 import GoalCard from '@/components/GoalCard'
 import PromotorDashboardClient from '@/components/PromotorDashboardClient'
-import { getMetrics, getComptesaRankings, getGerenteAccionistaRankings, getCLideresRankings } from '@/lib/kv'
+import { getMetrics, getCruiseRankings, getComptesaRankings, getGerenteAccionistaRankings, getCLideresRankings } from '@/lib/kv'
 import { query } from '@/lib/redshift'
-import { GRAD_POINTS, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, CLIDERES_MIN_POINTS, CLIDERES_TOP_N, CLIDERES_PRIZES, isPromotor } from '@/lib/config'
+import { GRAD_POINTS, CRUISE_TOP_N, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, CLIDERES_MIN_POINTS, CLIDERES_TOP_N, CLIDERES_PRIZES, isPromotor } from '@/lib/config'
 
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
 
@@ -186,6 +186,10 @@ export default async function DashboardPage({
   const gerenteAccionista = metrics.gerenteAccionista
   const competenciaLideres = metrics.competenciaLideres
 
+  // Top 15 del crucero: un solo ranking para todos (la tarjeta la ve todo vendedor,
+  // así que no va condicionado a ninguna competencia).
+  const cruiseRanking = (await getCruiseRankings()) ?? []
+
   // Top 10 por rol para la Competencia Tesla (idéntico para todos los del mismo rol)
   const myRole   = plinko?.role ?? 'trainee'
   const rankings = competenciaTesla ? await getComptesaRankings() : null
@@ -352,6 +356,60 @@ export default async function DashboardPage({
             <dt>Pts personales</dt><dd>{(cruise.personal ?? 0).toFixed(1)} / {cruise.personalTarget ?? '—'}</dd>
             <dt>Total</dt><dd className="highlight">{(cruise.total ?? 0).toFixed(1)} / {cruise.target}</dd>
           </dl>
+
+          {/* Top 15 — un solo ranking para todos los vendedores (no va por rol) */}
+          <div style={{ marginTop: '1rem', borderTop: '1px solid #edf0f8', paddingTop: '0.85rem' }}>
+            <div style={{
+              fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
+              letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
+              marginBottom: '0.6rem',
+            }}>
+              Top {CRUISE_TOP_N} — Crucero
+            </div>
+
+            {cruiseRanking.length === 0 ? (
+              <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.8rem', color: 'var(--gray)', margin: 0 }}>
+                Ranking disponible tras el próximo sync.
+              </p>
+            ) : (
+              <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {cruiseRanking.map((r, i) => {
+                  const isMe = r.zohoId === metrics.zohoId
+                  return (
+                    <li key={r.zohoId} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.6rem',
+                      padding: '0.4rem 0.55rem', borderRadius: 7,
+                      background: isMe ? 'rgba(245,166,35,0.14)' : i % 2 === 0 ? '#fafbff' : 'transparent',
+                      border: isMe ? '1px solid rgba(245,166,35,0.45)' : '1px solid transparent',
+                    }}>
+                      <span style={{
+                        width: '1.5rem', textAlign: 'center', flexShrink: 0,
+                        fontFamily: i < 3 ? 'inherit' : 'var(--font-bebas)',
+                        fontSize: i < 3 ? '1rem' : '0.85rem', color: 'var(--gray)',
+                      }}>{rankBadge(i + 1)}</span>
+                      <a href={`/p/${r.zohoId}`} style={{
+                        flex: 1, minWidth: 0, fontFamily: 'var(--font-body)', fontWeight: isMe ? 700 : 500,
+                        fontSize: '0.82rem', color: 'var(--navy)', textDecoration: 'none',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>{r.name}{isMe && ' (tú)'}</a>
+                      {/* Estar en el top 15 no es lo mismo que ir al crucero: se va
+                          llegando a los 70 pts, así que se marca quién ya clasificó. */}
+                      {r.qualified && (
+                        <span title={`Ya llegó a ${cruise.target} pts`} style={{
+                          flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                          fontSize: '0.66rem', color: '#1a7f4b',
+                        }}>✓</span>
+                      )}
+                      <span style={{
+                        flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                        fontSize: '0.82rem', color: 'var(--orange)',
+                      }}>{r.total.toFixed(1)} pts</span>
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </div>
         </div>
 
         {competenciaTesla && (
