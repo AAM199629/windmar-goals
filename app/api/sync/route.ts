@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { setMetrics, setMembersList, setCruiseRankings, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type CruiseRankEntry, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
+import { setMetrics, setMembersList, setCruiseRankings, setCruiseRanks, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type CruiseRankEntry, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
 import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, CRUISE_TARGET, CRUISE_TOP_N, COMPTESLA_START, COMPTESLA_END, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
 import type { MemberEntry } from '@/lib/kv'
@@ -481,6 +481,12 @@ async function runSync(month: string) {
     cruiseRank.sort((a, b) =>
       b.total - a.total || b.personal - a.personal || a.name.localeCompare(b.name))
     await setCruiseRankings(cruiseRank.slice(0, CRUISE_TOP_N))
+
+    // El puesto de TODOS (no solo el de los 15 primeros): la tarjeta le muestra a
+    // cada quien en qué número va del roster completo aunque esté fuera del top.
+    const cruiseRanks: Record<string, number> = {}
+    cruiseRank.forEach((c, i) => { cruiseRanks[c.zohoId] = i + 1 })
+    await setCruiseRanks({ rosterSize: cruiseRank.length, ranks: cruiseRanks })
 
     // ── 10b. Competencia Tesla: top 10 por rol (trainees NO participan) ────────
     const rankings: ComptesaRankings = {}

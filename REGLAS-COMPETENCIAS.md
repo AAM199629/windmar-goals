@@ -174,6 +174,11 @@ se va llegando a los 70 pts, así que en la lista se marca con ✓ a quien ya cl
 Empates: se desempata por puntos personales y luego por nombre. El ranking sale del snapshot
 del sync (cada hora), igual que el resto de las tarjetas.
 
+**Tu posición:** además del top 15, la tarjeta muestra el puesto propio dentro del **roster
+completo** (`Posición: #30 de 412`) y los puntos que faltan para los 70. Si estás fuera del
+top 15, tu fila se engancha al final de la lista con tu puesto real, para que no te quedes
+sin referencia. El puesto se calcula sobre el mismo orden del top 15 (mismos desempates).
+
 ---
 
 ## Parte 2 — Competencia Tesla (el viaje)

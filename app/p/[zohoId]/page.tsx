@@ -1,6 +1,6 @@
 import GoalCard from '@/components/GoalCard'
 import PromotorDashboardClient from '@/components/PromotorDashboardClient'
-import { getMetrics, getCruiseRankings, getComptesaRankings, getGerenteAccionistaRankings, getCLideresRankings } from '@/lib/kv'
+import { getMetrics, getCruiseRankings, getCruiseRanks, getComptesaRankings, getGerenteAccionistaRankings, getCLideresRankings } from '@/lib/kv'
 import { query } from '@/lib/redshift'
 import { GRAD_POINTS, CRUISE_TOP_N, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, CLIDERES_MIN_POINTS, CLIDERES_TOP_N, CLIDERES_PRIZES, isPromotor } from '@/lib/config'
 
@@ -190,6 +190,12 @@ export default async function DashboardPage({
   // así que no va condicionado a ninguna competencia).
   const cruiseRanking = (await getCruiseRankings()) ?? []
 
+  // Puesto propio dentro del roster completo. Un snapshot viejo de KV puede no
+  // traerlo todavía; en ese caso simplemente no se muestra la posición.
+  const cruiseRanks      = await getCruiseRanks()
+  const myCruiseRank     = cruiseRanks?.ranks?.[zohoId] ?? null
+  const cruiseRosterSize = cruiseRanks?.rosterSize ?? 0
+
   // Top 10 por rol para la Competencia Tesla (idéntico para todos los del mismo rol)
   const myRole   = plinko?.role ?? 'trainee'
   const rankings = competenciaTesla ? await getComptesaRankings() : null
@@ -355,6 +361,16 @@ export default async function DashboardPage({
             <dt>Grad. Gerente</dt><dd>{(cbd.gerente ?? 0).toFixed(1)}</dd>
             <dt>Pts personales</dt><dd>{(cruise.personal ?? 0).toFixed(1)} / {cruise.personalTarget ?? '—'}</dd>
             <dt>Total</dt><dd className="highlight">{(cruise.total ?? 0).toFixed(1)} / {cruise.target}</dd>
+            <dt>Faltan</dt>
+            <dd>{(cruise.total ?? 0) >= cruise.target
+              ? '✓ Meta cumplida'
+              : `${(cruise.target - (cruise.total ?? 0)).toFixed(1)} pts`}</dd>
+            {myCruiseRank !== null && (
+              <>
+                <dt>Posición</dt>
+                <dd className="highlight">#{myCruiseRank} de {cruiseRosterSize}</dd>
+              </>
+            )}
           </dl>
 
           {/* Top 15 — un solo ranking para todos los vendedores (no va por rol) */}
@@ -407,6 +423,43 @@ export default async function DashboardPage({
                     </li>
                   )
                 })}
+
+                {/* Fuera del top 15: se engancha tu propia fila al final con tu
+                    puesto real, para no dejarte sin referencia en la lista. */}
+                {myCruiseRank !== null && myCruiseRank > CRUISE_TOP_N && (
+                  <>
+                    <li aria-hidden style={{
+                      textAlign: 'center', color: '#c3cad8', fontSize: '0.7rem',
+                      lineHeight: 1, padding: '0.15rem 0',
+                    }}>⋯</li>
+                    <li style={{
+                      display: 'flex', alignItems: 'center', gap: '0.6rem',
+                      padding: '0.4rem 0.55rem', borderRadius: 7,
+                      background: 'rgba(245,166,35,0.14)',
+                      border: '1px solid rgba(245,166,35,0.45)',
+                    }}>
+                      <span style={{
+                        width: '1.5rem', textAlign: 'center', flexShrink: 0,
+                        fontFamily: 'var(--font-bebas)', fontSize: '0.85rem', color: 'var(--gray)',
+                      }}>{myCruiseRank}</span>
+                      <span style={{
+                        flex: 1, minWidth: 0, fontFamily: 'var(--font-body)', fontWeight: 700,
+                        fontSize: '0.82rem', color: 'var(--navy)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>{metrics.name} (tú)</span>
+                      {(cruise.total ?? 0) >= cruise.target && (
+                        <span title={`Ya llegó a ${cruise.target} pts`} style={{
+                          flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                          fontSize: '0.66rem', color: '#1a7f4b',
+                        }}>✓</span>
+                      )}
+                      <span style={{
+                        flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
+                        fontSize: '0.82rem', color: 'var(--orange)',
+                      }}>{(cruise.total ?? 0).toFixed(1)} pts</span>
+                    </li>
+                  </>
+                )}
               </ol>
             )}
           </div>
