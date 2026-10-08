@@ -3,9 +3,11 @@ import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
   PREMIO_PIPELINES, PLINKO_PIPELINES, PLINKO_POINTS,
+  ALL_PRODUCT_PIPELINES, PRODUCT_KEYS, PRODUCT_POINTS, productOf,
   plinkoTarget, ruletaTarget, normalizeRole,
   ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL,
 } from '@/lib/config'
+import type { ProductKey } from '@/lib/config'
 
 export type PrizeRole = 'consultor' | 'lider' | 'gerente'
 
@@ -25,10 +27,24 @@ export interface PlinkoWeek {
   rows:      PrizeRow[]
 }
 
+// Ranking mensual sin meta: alimenta las vistas Top Vendedores (ordena por
+// `total`, ponderado como Plinko) y Product Champions (ordena por
+// `byProduct[producto]`, unidades vendidas). Una sola estructura para las dos
+// porque salen de la misma agregacion.
+export interface TopRow {
+  zohoId:     string
+  name:       string
+  role:       PrizeRole
+  isEmpleado: boolean
+  total:      number                      // ponderado: Solar/Roofing 1 · Anker/Water 1/2
+  byProduct:  Record<ProductKey, number>  // unidades vendidas de cada producto
+}
+
 export interface PlinkoRuletaResponse {
   month:      string        // YYYY-MM
   ruleta:     PrizeRow[]
   plinko:     PlinkoWeek[]
+  top:        TopRow[]      // ventas del mes por producto (Top Vendedores + Champions)
   computedAt: string
 }
 
@@ -38,11 +54,13 @@ interface MemberRow {
   sales_role: string | null
 }
 interface MonthlyRow { member_id: string; cnt: string | number }
+interface ProductCountRow { member_id: string; pipeline: string | null; cnt: string | number }
 interface WeeklyRow  { member_id: string; week_start: string; cnt: string | number }
 
 // PREMIO_PIPELINES / PLINKO_* son constantes estáticas → interpolación segura en SQL.
 const PREMIO_IN = PREMIO_PIPELINES.map(p => `'${p}'`).join(', ')   // Ruleta: Solar + Roofing
 const PLINKO_IN = PLINKO_PIPELINES.map(p => `'${p}'`).join(', ')   // Plinko: + Anker + Water
+const PRODUCT_IN = ALL_PRODUCT_PIPELINES.map(p => `'${p}'`).join(', ') // Top/Champions: los 4 productos
 // Suma ponderada de ventas para Plinko: Solar + Roofing = 1 pto, Anker + Water = ½ pto.
 const PLINKO_WEIGHT_SQL =
   'SUM(CASE ' +
@@ -93,7 +111,7 @@ function buildFetcher(month: string) {
       const rangeStart = weeks[0].weekStart
       const rangeEnd   = weeks[weeks.length - 1].weekEnd
 
-      const [members, ruletaRows, plinkoRows] = await Promise.all([
+      const [members, ruletaRows, plinkoRows, productRows] = await Promise.all([
 
         // ── 1. Miembros activos (con rol) ──────────────────────────────────────
         query<MemberRow>(`
@@ -150,6 +168,30 @@ function buildFetcher(month: string) {
           GROUP BY stm.member_id, TO_CHAR(DATE_TRUNC('week', fd.closing_date), 'YYYY-MM-DD')
         `, [rangeStart, rangeEnd]),
 
+        // -- 4. Ventas del mes por miembro y pipeline (Top Vendedores + Champions) --
+        // Conteo crudo por producto; la ponderacion del total se aplica abajo.
+        // PRODUCT_IN deja fuera 'commercial solar': las ventas comerciales no
+        // entran en estos dos rankings.
+        query<ProductCountRow>(`
+          SELECT stm.member_id, LOWER(dp.pipeline) AS pipeline, COUNT(*) AS cnt
+          FROM dwh.fact_deals fd
+          JOIN dwh.dim_profiles dp
+            ON dp.id_profile = fd.id_profile
+          JOIN dwh.dim_status_reason dsr
+            ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
+          JOIN dwh.dim_staff ds
+            ON ds.id_staff = fd.id_staff AND ds.is_current = true
+          LEFT JOIN dw_zoho.dim_sales_team_member stm
+            ON stm.member_id = ds.sales_rep
+          WHERE fd.closing_date >= $1
+            AND fd.closing_date <= $2
+            AND fd.closing_date IS NOT NULL
+            AND ${ACTIVE_DEAL_SQL}
+            AND stm.member_id IS NOT NULL
+            AND LOWER(dp.pipeline) IN (${PRODUCT_IN})
+          GROUP BY stm.member_id, LOWER(dp.pipeline)
+        `, [first, last]),
+
       ])
 
       // ── Metadata por miembro ────────────────────────────────────────────────
@@ -204,9 +246,29 @@ function buildFetcher(month: string) {
         return { weekStart: w.weekStart, weekEnd: w.weekEnd, rows }
       })
 
-      return { month, ruleta, plinko, computedAt: new Date().toISOString() }
+      // -- Top Vendedores / Product Champions: ventas del mes por producto --------
+      const byMember: Record<string, TopRow> = {}
+      for (const r of productRows) {
+        const m = meta[r.member_id]
+        if (!m) continue
+        const key = productOf(r.pipeline)
+        if (!key) continue
+        const cnt = Number(r.cnt) || 0
+        if (cnt <= 0) continue
+        const row = byMember[r.member_id] ??= {
+          zohoId: r.member_id, name: m.name, role: m.role, isEmpleado: m.isEmpleado,
+          total: 0,
+          byProduct: Object.fromEntries(PRODUCT_KEYS.map(k => [k, 0])) as Record<ProductKey, number>,
+        }
+        row.byProduct[key] += cnt
+        row.total         += cnt * PRODUCT_POINTS[key]
+      }
+      const top = Object.values(byMember)
+        .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'))
+
+      return { month, ruleta, plinko, top, computedAt: new Date().toISOString() }
     },
-    ['plinko-ruleta', month],
+    ['plinko-ruleta-v3', month],   // v3: `top` ponderado y sin ventas comerciales
     { revalidate: 3600 },
   )()
 }

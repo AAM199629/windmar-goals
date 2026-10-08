@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
-import { PREMIO_PIPELINES, PLINKO_PIPELINES, ACTIVE_DEAL_SQL } from '@/lib/config'
+import {
+  PREMIO_PIPELINES, PLINKO_PIPELINES, ALL_PRODUCT_PIPELINES,
+  PRODUCT_PIPELINES, isProductKey, ACTIVE_DEAL_SQL,
+} from '@/lib/config'
 
 // Desglose de las ventas elegibles y activas que componen el conteo de un
 // vendedor en un periodo dado. Ruleta (mes) = Solar + Roofing; Plinko (semana)
@@ -29,8 +32,21 @@ interface DealRow {
   on_hold_status: string | null
 }
 
-const PREMIO_IN = PREMIO_PIPELINES.map(p => `'${p}'`).join(', ')
-const PLINKO_IN = PLINKO_PIPELINES.map(p => `'${p}'`).join(', ')
+const quoteIn = (ps: string[]) => ps.map(p => `'${p}'`).join(', ')
+
+const PREMIO_IN  = quoteIn(PREMIO_PIPELINES)
+const PLINKO_IN  = quoteIn(PLINKO_PIPELINES)
+const PRODUCT_IN = quoteIn(ALL_PRODUCT_PIPELINES)
+
+// `mode` decide que pipelines componen el conteo que se esta desglosando:
+// ruleta = Solar + Roofing · plinko = + Anker + Water · top = los 4 productos ·
+// solar/roofing/pps/water = solo ese producto (Product Champions).
+function pipelineFilter(mode: string): string {
+  if (mode === 'plinko')     return PLINKO_IN
+  if (mode === 'top')        return PRODUCT_IN
+  if (isProductKey(mode))    return quoteIn(PRODUCT_PIPELINES[mode])
+  return PREMIO_IN
+}
 
 export async function GET(req: Request) {
   try {
@@ -44,8 +60,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Parámetros inválidos (zohoId, start, end)' }, { status: 400 })
     }
 
-    // Plinko incluye Anker + Water (½ pto); Ruleta solo Solar + Roofing.
-    const PIPELINE_IN = mode === 'plinko' ? PLINKO_IN : PREMIO_IN
+    const PIPELINE_IN = pipelineFilter(mode)
 
     const rows = await query<DealRow>(`
       SELECT

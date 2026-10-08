@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { PlinkoRuletaResponse, PrizeRow, PrizeRole } from '@/app/api/plinko-ruleta/route'
+import type { PlinkoRuletaResponse, PrizeRow, PrizeRole, TopRow } from '@/app/api/plinko-ruleta/route'
 import type { DealDetail } from '@/app/api/plinko-ruleta/deals/route'
-import { PLINKO_POINTS } from '@/lib/config'
+import { PLINKO_POINTS, PRODUCT_KEYS, PRODUCT_LABELS, PREMIOS_TOP_N } from '@/lib/config'
+import type { ProductKey } from '@/lib/config'
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 const numTd: React.CSSProperties = {
@@ -24,6 +25,10 @@ const ROLE_TABS: { role: PrizeRole; label: string }[] = [
   { role: 'gerente',   label: 'Gerentes' },
 ]
 
+const ROLE_SINGULAR: Record<PrizeRole, string> = {
+  consultor: 'Consultor', lider: 'Líder', gerente: 'Gerente',
+}
+
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -39,6 +44,10 @@ function monthLastDay(yyyymm: string) {
   const [y, m] = yyyymm.split('-')
   const d = new Date(Number(y), Number(m), 0).getDate()
   return `${yyyymm}-${String(d).padStart(2, '0')}`
+}
+// Los totales de Top Vendedores son ponderados: 7.5 pts, no 7.5 ventas.
+function fmtPts(n: number) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
 }
 function fmtMoney(n: number | null) {
   if (n == null) return '—'
@@ -57,7 +66,64 @@ function availableMonths(): string[] {
   return out.reverse()   // más reciente primero
 }
 
-type Mode = 'plinko' | 'ruleta'
+// ── Modos de la página ─────────────────────────────────────────────────────────
+// Ruleta y Plinko reparten premio (hay meta y clasificados). Top Vendedores y
+// Product Champions son solo rankings mensuales: sin meta, sin clasificados.
+type Mode = 'ruleta' | 'plinko' | 'top' | 'champions'
+
+const MODE_TABS: { mode: Mode; label: string }[] = [
+  { mode: 'ruleta',    label: '🎡 Ruleta' },
+  { mode: 'plinko',    label: '🎯 Plinko' },
+  { mode: 'top',       label: '🏅 Top Vendedores' },
+  { mode: 'champions', label: '🏆 Product Champions' },
+]
+
+const MODE_HERO: Record<Mode, { bg: string; accent: string; eyebrow: string }> = {
+  ruleta:    { bg: '/Ruleta.png',  accent: 'var(--gold)',   eyebrow: 'GANADORES POR ROL · PREMIO MENSUAL' },
+  plinko:    { bg: '/Plinko.jpeg', accent: 'var(--blue)',   eyebrow: 'GANADORES POR ROL · PREMIO SEMANAL' },
+  top:       { bg: '/Solar.jpeg',  accent: 'var(--orange)', eyebrow: `TOP ${PREMIOS_TOP_N} POR ROL · PUNTOS DEL MES` },
+  champions: { bg: '/Solar.png',   accent: 'var(--blue)',   eyebrow: 'MÁS VENTAS POR PRODUCTO · MES' },
+}
+
+// Una fila de ranking (Top Vendedores / Product Champions): sin meta ni premio.
+interface RankItem {
+  zohoId:     string
+  name:       string
+  role:       PrizeRole
+  isEmpleado: boolean
+  ventas:     number
+}
+
+// Top N del rol por puntos del mes (Solar y Roofing 1 · Anker y Water ½), con
+// full commission y empleados (asalariados) en el MISMO ranking — a diferencia
+// de Ruleta/Plinko, que los separan en dos tablas.
+function topByRole(rows: TopRow[], role: PrizeRole): RankItem[] {
+  return rows
+    .filter(r => r.role === role)
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'))
+    .slice(0, PREMIOS_TOP_N)
+    .map(r => ({ zohoId: r.zohoId, name: r.name, role: r.role, isEmpleado: r.isEmpleado, ventas: r.total }))
+}
+
+// Top N de un producto, con los 3 roles juntos: la pregunta es quién vendió más
+// de ese producto, no quién lo vendió más dentro de su rol.
+function topByProduct(rows: TopRow[], key: ProductKey): RankItem[] {
+  return rows
+    .filter(r => (r.byProduct?.[key] ?? 0) > 0)
+    .sort((a, b) => (b.byProduct[key] - a.byProduct[key]) || a.name.localeCompare(b.name, 'es'))
+    .slice(0, PREMIOS_TOP_N)
+    .map(r => ({ zohoId: r.zohoId, name: r.name, role: r.role, isEmpleado: r.isEmpleado, ventas: r.byProduct[key] }))
+}
+
+// Qué conteo se está desglosando al abrir el modal.
+interface DetailTarget {
+  zohoId:   string
+  name:     string
+  ventas:   number
+  meta:     number | null   // null en los rankings (no hay meta que alcanzar)
+  dealMode: string          // mode del endpoint: ruleta · plinko · top · <producto>
+  scope:    string          // qué productos entran, para la nota del modal
+}
 
 export default function PlinkoRuletaClient() {
   const MONTHS = availableMonths()
@@ -68,7 +134,7 @@ export default function PlinkoRuletaClient() {
   const [data, setData]           = useState<PlinkoRuletaResponse | null>(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
-  const [detailRow, setDetailRow]     = useState<PrizeRow | null>(null)
+  const [detail, setDetail]           = useState<DetailTarget | null>(null)
   const [detailDeals, setDetailDeals] = useState<DealDetail[] | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
@@ -86,31 +152,40 @@ export default function PlinkoRuletaClient() {
 
   const weeks   = data?.plinko ?? []
   const wIdx    = Math.min(weekIdx, Math.max(0, weeks.length - 1))
-  const bg      = mode === 'plinko' ? '/Plinko.jpeg' : '/Ruleta.png'
-  const accent  = mode === 'plinko' ? 'var(--blue)' : 'var(--gold)'
+  const topRows = data?.top ?? []
+  const { bg, accent, eyebrow } = MODE_HERO[mode]
+  const isPremio = mode === 'ruleta' || mode === 'plinko'
 
   // Filas del periodo activo (Ruleta = mes · Plinko = semana seleccionada)
-  const periodRows: PrizeRow[] = mode === 'ruleta'
-    ? (data?.ruleta ?? [])
-    : (weeks[wIdx]?.rows ?? [])
+  const periodRows: PrizeRow[] = mode === 'plinko'
+    ? (weeks[wIdx]?.rows ?? [])
+    : (data?.ruleta ?? [])
 
   const roleRows = periodRows.filter(r => r.role === activeRole)
   const fcRows   = roleRows.filter(r => !r.isEmpleado)
   const empRows  = roleRows.filter(r => r.isEmpleado)
 
-  // Rango del periodo activo (Ruleta = mes · Plinko = semana seleccionada)
-  const periodStart = mode === 'ruleta' ? `${month}-01`          : (weeks[wIdx]?.weekStart ?? `${month}-01`)
-  const periodEnd   = mode === 'ruleta' ? monthLastDay(month)    : (weeks[wIdx]?.weekEnd   ?? monthLastDay(month))
-  const periodLabel = mode === 'ruleta' ? monthLabel(month)      : (weeks[wIdx] ? `Semana ${wIdx + 1} (${fmtDay(weeks[wIdx].weekStart)}–${fmtDay(weeks[wIdx].weekEnd)})` : '')
+  // Rango del periodo activo. Solo Plinko es semanal; los demás modos son del mes.
+  const periodStart = mode === 'plinko' ? (weeks[wIdx]?.weekStart ?? `${month}-01`)       : `${month}-01`
+  const periodEnd   = mode === 'plinko' ? (weeks[wIdx]?.weekEnd   ?? monthLastDay(month)) : monthLastDay(month)
+  const periodLabel = mode === 'plinko'
+    ? (weeks[wIdx] ? `Semana ${wIdx + 1} (${fmtDay(weeks[wIdx].weekStart)}–${fmtDay(weeks[wIdx].weekEnd)})` : '')
+    : monthLabel(month)
 
-  function openDetail(row: PrizeRow) {
-    setDetailRow(row); setDetailDeals(null); setDetailLoading(true)
-    fetch(`/api/plinko-ruleta/deals?zohoId=${row.zohoId}&start=${periodStart}&end=${periodEnd}&mode=${mode}`)
+  function openDetail(t: DetailTarget) {
+    setDetail(t); setDetailDeals(null); setDetailLoading(true)
+    fetch(`/api/plinko-ruleta/deals?zohoId=${t.zohoId}&start=${periodStart}&end=${periodEnd}&mode=${t.dealMode}`)
       .then(r => r.json())
       .then((d: { deals?: DealDetail[] }) => setDetailDeals(d.deals ?? []))
       .catch(() => setDetailDeals([]))
       .finally(() => setDetailLoading(false))
   }
+
+  // Ruleta / Plinko: el conteo trae meta y el desglose usa el modo del premio.
+  const openPrize = (row: PrizeRow) => openDetail({
+    zohoId: row.zohoId, name: row.name, ventas: row.ventas, meta: row.meta,
+    dealMode: mode, scope: mode === 'plinko' ? 'Solar y Roofing (1 pto) · Anker y Water (½ pto)' : 'Solar y Roofing',
+  })
 
   // Metas por rol para la leyenda del modo activo
   const metaFor = (role: PrizeRole): number => {
@@ -121,6 +196,31 @@ export default function PlinkoRuletaClient() {
     const mm = Number(month.slice(5, 7)); const hi = mm >= 4 && mm <= 9
     return role === 'consultor' ? (hi ? 6 : 4) : role === 'lider' ? (hi ? 8 : 6) : (hi ? 10 : 8)
   }
+
+  const legend: string[] = isPremio
+    ? [
+        `${mode === 'plinko' ? 'Meta semanal' : 'Meta mensual'}: Consultor ${metaFor('consultor')} · Líder ${metaFor('lider')} · Gerente ${metaFor('gerente')} ventas`,
+        mode === 'plinko'
+          ? 'Cuentan: Solar y Roofing (1 pto) · Anker y Water (½ pto)'
+          : 'Cuentan: Solar (res. + com.) y Roofing',
+        'Clasificado = alcanzó su meta en el periodo',
+        '⚠️ La lista oficial y final se publica en los respectivos chats',
+      ]
+    : mode === 'top'
+      ? [
+          `Top ${PREMIOS_TOP_N} de cada rol por puntos del mes`,
+          'Full commission y empleados (asalariados) en la misma lista',
+          'Cuentan: Solar residencial y Roofing (1 pto) · Anker (PPS) y Water (½ pto)',
+          'Las ventas comerciales no cuentan',
+          'Ranking informativo: no reparte premio de Ruleta ni de Plinko',
+        ]
+      : [
+          `Top ${PREMIOS_TOP_N} de cada producto por ventas del mes`,
+          'Unidades vendidas: 1 venta = 1 venta, sin ponderar',
+          'Solar = residencial · las ventas comerciales no cuentan',
+          'Los 3 roles compiten juntos — full commission y empleados incluidos',
+          'Ranking informativo: no reparte premio de Ruleta ni de Plinko',
+        ]
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--light)', paddingBottom: '3rem' }}>
@@ -146,9 +246,9 @@ export default function PlinkoRuletaClient() {
 
         {/* Título */}
         <div style={{ position: 'relative', zIndex: 3, padding: '0 2rem 1.75rem', marginTop: 'auto' }}>
-          <div style={{ fontFamily: 'var(--font-bebas)', fontSize: 'clamp(3.5rem, 11vw, 7rem)', color: '#fff', letterSpacing: '0.04em', lineHeight: 0.85, textShadow: '0 4px 40px rgba(0,0,0,0.8)' }}>PLINKO & RULETA</div>
+          <div style={{ fontFamily: 'var(--font-bebas)', fontSize: 'clamp(3.5rem, 11vw, 7rem)', color: '#fff', letterSpacing: '0.04em', lineHeight: 0.85, textShadow: '0 4px 40px rgba(0,0,0,0.8)' }}>PLINKO &amp; RULETA</div>
           <p style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.24em', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginTop: '0.4rem' }}>
-            GANADORES POR ROL &nbsp;·&nbsp; {mode === 'plinko' ? 'PREMIO SEMANAL' : 'PREMIO MENSUAL'} &nbsp;·&nbsp; {monthLabel(month)}
+            {eyebrow} &nbsp;·&nbsp; {monthLabel(month)}
           </p>
         </div>
       </section>
@@ -156,13 +256,13 @@ export default function PlinkoRuletaClient() {
       {/* ═══════════════ CONTROLES ═══════════════ */}
       <div style={{ padding: '1.25rem 1.5rem 0', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {/* Toggle modo */}
-        <div style={{ display: 'flex', borderRadius: 999, overflow: 'hidden', border: '1px solid #d7deec' }}>
-          {(['ruleta', 'plinko'] as Mode[]).map(m => (
+        <div style={{ display: 'flex', borderRadius: 999, overflow: 'hidden', border: '1px solid #d7deec', flexWrap: 'wrap' }}>
+          {MODE_TABS.map(({ mode: m, label }) => (
             <button key={m} onClick={() => setMode(m)} style={{
               fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.8rem', letterSpacing: '0.08em',
-              textTransform: 'uppercase', padding: '0.55rem 1.5rem', cursor: 'pointer', border: 'none',
+              textTransform: 'uppercase', padding: '0.55rem 1.35rem', cursor: 'pointer', border: 'none',
               background: mode === m ? 'var(--navy)' : '#fff', color: mode === m ? '#fff' : 'var(--gray)', transition: 'all 0.15s',
-            }}>{m === 'ruleta' ? '🎡 Ruleta' : '🎯 Plinko'}</button>
+            }}>{label}</button>
           ))}
         </div>
 
@@ -193,50 +293,107 @@ export default function PlinkoRuletaClient() {
         </div>
       )}
 
-      {/* ═══════════════ TARJETAS DE GANADORES POR ROL ═══════════════ */}
-      <div className="section-eyebrow" style={{ background: 'var(--light)' }}>
-        🏆 Ganadores {mode === 'plinko' ? `— Semana ${wIdx + 1} (${weeks[wIdx] ? `${fmtDay(weeks[wIdx].weekStart)}–${fmtDay(weeks[wIdx].weekEnd)}` : '—'})` : `— ${monthLabel(month)}`}
-      </div>
-      <div style={{ padding: '0 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        {ROLE_TABS.map(({ role, label }) => {
-          const rr = periodRows.filter(r => r.role === role && r.clasificado)
-          const fc = rr.filter(r => !r.isEmpleado).length
-          const emp = rr.filter(r => r.isEmpleado).length
-          return (
-            <div key={role} style={{ flex: '1 1 200px', background: '#fff', border: '1px solid #e2e8f4', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(13,22,84,0.06)' }}>
-              <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gray)' }}>{label}</div>
-              <div style={{ fontFamily: 'var(--font-bebas)', fontSize: '2.6rem', lineHeight: 1, color: rr.length > 0 ? accent : '#ccd3e0', margin: '0.2rem 0' }}>{loading ? '…' : rr.length}</div>
-              <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.62rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gray)' }}>
-                clasificados · <span style={{ color: 'var(--navy)' }}>{fc}</span> full comm · <span style={{ color: 'var(--navy)' }}>{emp}</span> empleados
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      {/* ═══════════════ RULETA / PLINKO ═══════════════ */}
+      {isPremio && (
+        <>
+          {/* Tarjetas de ganadores por rol */}
+          <div className="section-eyebrow" style={{ background: 'var(--light)' }}>
+            🏆 Ganadores — {periodLabel || '—'}
+          </div>
+          <div style={{ padding: '0 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            {ROLE_TABS.map(({ role, label }) => {
+              const rr = periodRows.filter(r => r.role === role && r.clasificado)
+              const fc = rr.filter(r => !r.isEmpleado).length
+              const emp = rr.filter(r => r.isEmpleado).length
+              return (
+                <div key={role} style={{ flex: '1 1 200px', background: '#fff', border: '1px solid #e2e8f4', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(13,22,84,0.06)' }}>
+                  <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gray)' }}>{label}</div>
+                  <div style={{ fontFamily: 'var(--font-bebas)', fontSize: '2.6rem', lineHeight: 1, color: rr.length > 0 ? accent : '#ccd3e0', margin: '0.2rem 0' }}>{loading ? '…' : rr.length}</div>
+                  <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.62rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gray)' }}>
+                    clasificados · <span style={{ color: 'var(--navy)' }}>{fc}</span> full comm · <span style={{ color: 'var(--navy)' }}>{emp}</span> empleados
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
-      {/* ═══════════════ PESTAÑAS DE ROL ═══════════════ */}
-      <div style={{ padding: '1.25rem 1.5rem 0', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {ROLE_TABS.map(({ role, label }) => {
-          const isActive = role === activeRole
-          const count = periodRows.filter(r => r.role === role).length
-          return (
-            <button key={role} onClick={() => setActiveRole(role)} style={{
-              fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.8rem', letterSpacing: '0.08em', textTransform: 'uppercase',
-              padding: '0.55rem 1.25rem', borderRadius: 999, cursor: 'pointer',
-              border: isActive ? '1px solid var(--navy)' : '1px solid #d7deec',
-              background: isActive ? 'var(--navy)' : '#fff', color: isActive ? '#fff' : 'var(--gray)', transition: 'all 0.15s',
-            }}>
-              {label}<span style={{ marginLeft: 8, fontSize: '0.7rem', color: isActive ? 'rgba(255,255,255,0.6)' : '#aab4cc' }}>{loading ? '' : count}</span>
-            </button>
-          )
-        })}
-      </div>
+          {/* Pestañas de rol */}
+          <div style={{ padding: '1.25rem 1.5rem 0', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {ROLE_TABS.map(({ role, label }) => {
+              const isActive = role === activeRole
+              const count = periodRows.filter(r => r.role === role).length
+              return (
+                <button key={role} onClick={() => setActiveRole(role)} style={{
+                  fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.8rem', letterSpacing: '0.08em', textTransform: 'uppercase',
+                  padding: '0.55rem 1.25rem', borderRadius: 999, cursor: 'pointer',
+                  border: isActive ? '1px solid var(--navy)' : '1px solid #d7deec',
+                  background: isActive ? 'var(--navy)' : '#fff', color: isActive ? '#fff' : 'var(--gray)', transition: 'all 0.15s',
+                }}>
+                  {label}<span style={{ marginLeft: 8, fontSize: '0.7rem', color: isActive ? 'rgba(255,255,255,0.6)' : '#aab4cc' }}>{loading ? '' : count}</span>
+                </button>
+              )
+            })}
+          </div>
 
-      {/* ═══════════════ TABLAS FC / EMPLEADOS ═══════════════ */}
-      <div style={{ padding: '1rem 1.5rem 0', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <PrizeTable title="Full Commission" rows={fcRows} accent={accent} loading={loading} onOpen={openDetail} />
-        <PrizeTable title="Empleados"       rows={empRows} accent={accent} loading={loading} onOpen={openDetail} />
-      </div>
+          {/* Tablas FC / Empleados */}
+          <div style={{ padding: '1rem 1.5rem 0', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <PrizeTable title="Full Commission" rows={fcRows} accent={accent} loading={loading} onOpen={openPrize} />
+            <PrizeTable title="Empleados"       rows={empRows} accent={accent} loading={loading} onOpen={openPrize} />
+          </div>
+        </>
+      )}
+
+      {/* ═══════════════ TOP VENDEDORES (por rol, FC + empleados juntos) ═══════════════ */}
+      {mode === 'top' && (
+        <>
+          <div className="section-eyebrow" style={{ background: 'var(--light)' }}>
+            🏅 Top {PREMIOS_TOP_N} por rol — {periodLabel}
+          </div>
+          <div style={{ padding: '0 1.5rem', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {ROLE_TABS.map(({ role, label }) => (
+              <RankTable
+                key={role}
+                title={label}
+                rows={topByRole(topRows, role)}
+                accent={accent}
+                loading={loading}
+                showRole={false}
+                valueLabel="Puntos"
+                onOpen={item => openDetail({
+                  zohoId: item.zohoId, name: item.name, ventas: item.ventas, meta: null,
+                  dealMode: 'top', scope: 'Solar residencial y Roofing (1 pto) · Anker (PPS) y Water (½ pto)',
+                })}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ═══════════════ PRODUCT CHAMPIONS (por producto, todos los roles) ═══════════════ */}
+      {mode === 'champions' && (
+        <>
+          <div className="section-eyebrow" style={{ background: 'var(--light)' }}>
+            🏆 Product Champions — {periodLabel}
+          </div>
+          <div style={{ padding: '0 1.5rem', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {PRODUCT_KEYS.map(key => (
+              <RankTable
+                key={key}
+                title={PRODUCT_LABELS[key]}
+                rows={topByProduct(topRows, key)}
+                accent={accent}
+                loading={loading}
+                showRole
+                valueLabel="Ventas"
+                onOpen={item => openDetail({
+                  zohoId: item.zohoId, name: item.name, ventas: item.ventas, meta: null,
+                  dealMode: key, scope: PRODUCT_LABELS[key],
+                })}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {error && (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#dc2626', fontFamily: 'var(--font-cond)' }}>Error al cargar datos: {error}</div>
@@ -244,14 +401,7 @@ export default function PlinkoRuletaClient() {
 
       {/* Leyenda */}
       <div style={{ marginTop: '1.5rem', padding: '0 1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center', fontFamily: 'var(--font-cond)', fontSize: '0.72rem', color: 'var(--gray)', letterSpacing: '0.04em' }}>
-        {[
-          `${mode === 'plinko' ? 'Meta semanal' : 'Meta mensual'}: Consultor ${metaFor('consultor')} · Líder ${metaFor('lider')} · Gerente ${metaFor('gerente')} ventas`,
-          mode === 'plinko'
-            ? 'Cuentan: Solar y Roofing (1 pto) · Anker y Water (½ pto)'
-            : 'Cuentan: Solar (res. + com.) y Roofing',
-          'Clasificado = alcanzó su meta en el periodo',
-          '⚠️ La lista oficial y final se publica en los respectivos chats',
-        ].map(t => (
+        {legend.map(t => (
           <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--orange)', display: 'inline-block', flexShrink: 0 }} />{t}
           </span>
@@ -265,14 +415,13 @@ export default function PlinkoRuletaClient() {
       )}
 
       {/* ═══════════════ MODAL DE DESGLOSE ═══════════════ */}
-      {detailRow && (
+      {detail && (
         <DealsModal
-          row={detailRow}
+          target={detail}
           periodLabel={periodLabel}
           deals={detailDeals}
           loading={detailLoading}
-          mode={mode}
-          onClose={() => setDetailRow(null)}
+          onClose={() => setDetail(null)}
         />
       )}
     </main>
@@ -284,10 +433,15 @@ function plinkoPts(pipeline: string | null): number {
   return PLINKO_POINTS[(pipeline ?? '').toLowerCase()] ?? 0
 }
 
-function DealsModal({ row, periodLabel, deals, loading, mode, onClose }: {
-  row: PrizeRow; periodLabel: string; deals: DealDetail[] | null; loading: boolean; mode: Mode; onClose: () => void
+function DealsModal({ target, periodLabel, deals, loading, onClose }: {
+  target: DetailTarget; periodLabel: string; deals: DealDetail[] | null; loading: boolean; onClose: () => void
 }) {
-  const showPts = mode === 'plinko'
+  // Conteos ponderados (Plinko y Top Vendedores): se muestra la columna Puntos,
+  // porque la suma de los deals no da el número del ranking.
+  const showPts = target.dealMode === 'plinko' || target.dealMode === 'top'
+  const unidad = target.dealMode === 'top'
+    ? `${fmtPts(target.ventas)} pt${target.ventas === 1 ? '' : 's'}`
+    : `${target.ventas} venta${target.ventas === 1 ? '' : 's'} elegible${target.ventas === 1 ? '' : 's'}`
   const th: React.CSSProperties = { padding: '0.55rem 0.7rem', textAlign: 'left', fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)', background: 'var(--navy)', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { padding: '0.55rem 0.7rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--navy)', borderBottom: '1px solid #edf0f8', whiteSpace: 'nowrap' }
   return (
@@ -296,9 +450,10 @@ function DealsModal({ row, periodLabel, deals, loading, mode, onClose }: {
         {/* Header */}
         <div style={{ padding: '1.1rem 1.4rem', borderBottom: '1px solid #e2e8f4', display: 'flex', alignItems: 'flex-start', gap: '1rem', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-bebas)', fontSize: '1.5rem', color: 'var(--navy)', letterSpacing: '0.03em', lineHeight: 1.1 }}>{row.name}</div>
+            <div style={{ fontFamily: 'var(--font-bebas)', fontSize: '1.5rem', color: 'var(--navy)', letterSpacing: '0.03em', lineHeight: 1.1 }}>{target.name}</div>
             <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--gray)', marginTop: 2 }}>
-              {periodLabel} · {row.ventas} venta{row.ventas === 1 ? '' : 's'} elegible{row.ventas === 1 ? '' : 's'} (meta {row.meta})
+              {periodLabel} · {unidad}
+              {target.meta != null ? ` (meta ${target.meta})` : ` · ${target.scope}`}
             </div>
           </div>
           <button onClick={onClose} style={{ marginLeft: 'auto', border: 'none', background: '#eef1f9', color: 'var(--navy)', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, flexShrink: 0 }}>✕</button>
@@ -342,11 +497,95 @@ function DealsModal({ row, periodLabel, deals, loading, mode, onClose }: {
                 </tbody>
               </table>
               <p style={{ fontFamily: 'var(--font-cond)', fontSize: '0.68rem', color: '#aab4cc', letterSpacing: '0.03em', padding: '0.75rem 0.7rem 0' }}>
-                “All Sales Docs Received” aún no está disponible en el warehouse (n/d). Se muestran las ventas activas elegibles del periodo{showPts ? ' — Solar y Roofing (1 pto) · Anker y Water (½ pto)' : ' (Solar + Roofing)'}.
+                “All Sales Docs Received” aún no está disponible en el warehouse (n/d). Se muestran las ventas activas elegibles del periodo — {target.scope}.
               </p>
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Tabla de ranking (Top Vendedores / Product Champions): sin meta ni premio ───
+function RankTable({ title, rows, accent, loading, showRole, valueLabel, onOpen }: {
+  title: string; rows: RankItem[]; accent: string; loading: boolean; showRole: boolean
+  valueLabel: string; onOpen: (item: RankItem) => void
+}) {
+  const cols: [string, 'left' | 'center'][] = [
+    ['#', 'center'], ['Nombre', 'left'],
+    ...(showRole ? ([['Rol', 'center']] as [string, 'center'][]) : []),
+    ['Tipo', 'center'], [valueLabel, 'center'],
+  ]
+  return (
+    <div style={{ flex: '1 1 320px', minWidth: 290 }}>
+      <div style={{ fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--navy)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {title}
+        <span style={{ background: '#eef1f9', color: 'var(--gray)', borderRadius: 999, padding: '0.1rem 0.55rem', fontSize: '0.62rem' }}>{loading ? '…' : `Top ${rows.length}`}</span>
+      </div>
+      <div style={{ overflowX: 'auto', borderRadius: '0.75rem', boxShadow: '0 4px 24px rgba(13,22,84,0.10)', border: '1px solid #e2e8f4' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', fontFamily: 'var(--font-body)', fontSize: '0.875rem', minWidth: 290 }}>
+          <thead>
+            <tr style={{ background: 'var(--navy)' }}>
+              {cols.map(([label, align]) => (
+                <th key={label} style={{ padding: '0.6rem 0.5rem', fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.66rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)', textAlign: align, whiteSpace: 'nowrap' }}>{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #edf0f8' }}>
+                  {cols.map((_, j) => (
+                    <td key={j} style={{ padding: '0.7rem 0.5rem' }}><div style={{ height: 13, borderRadius: 4, background: '#e8eef8', animation: 'pulse 1.5s ease-in-out infinite', width: j === 1 ? '80%' : '50%', margin: j === 1 ? 0 : '0 auto' }} /></td>
+                  ))}
+                </tr>
+              ))
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={cols.length} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--gray)', fontFamily: 'var(--font-cond)' }}>Sin ventas en este periodo.</td></tr>
+            ) : rows.map((m, i) => {
+              const { icon, color } = rankBadge(i + 1)
+              return (
+                <tr key={m.zohoId} style={{ background: i % 2 === 0 ? '#fff' : '#fafbff', borderBottom: '1px solid #edf0f8' }}>
+                  <td style={{ padding: '0.7rem 0.25rem 0.7rem 0.75rem', textAlign: 'center', fontFamily: i < 3 ? 'inherit' : 'var(--font-bebas)', fontSize: i < 3 ? '1.2rem' : '0.9rem', color, lineHeight: 1 }}>{icon}</td>
+                  <td style={{ padding: '0.7rem 0.5rem 0.7rem 1rem' }}>
+                    <a href={`/p/${m.zohoId}`} style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--navy)', textDecoration: 'none' }}>{m.name}</a>
+                  </td>
+                  {showRole && (
+                    <td style={{ padding: '0.7rem 0.5rem', textAlign: 'center', fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.72rem', color: 'var(--gray)', whiteSpace: 'nowrap' }}>
+                      {ROLE_SINGULAR[m.role]}
+                    </td>
+                  )}
+                  <td style={{ padding: '0.7rem 0.5rem', textAlign: 'center' }}>
+                    <span
+                      title={m.isEmpleado ? 'Empleado (asalariado)' : 'Full commission'}
+                      style={{
+                        fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.55rem', letterSpacing: '0.1em',
+                        textTransform: 'uppercase', padding: '0.15rem 0.5rem', borderRadius: 999, whiteSpace: 'nowrap',
+                        background: m.isEmpleado ? 'rgba(13,22,84,0.08)' : 'rgba(0,127,196,0.10)',
+                        color: m.isEmpleado ? 'var(--navy)' : 'var(--blue)',
+                      }}
+                    >{m.isEmpleado ? 'Empleado' : 'Full comm'}</span>
+                  </td>
+                  <td style={{ ...numTd, padding: 0 }}>
+                    <button
+                      onClick={() => onOpen(m)}
+                      title="Ver desglose de ventas"
+                      style={{
+                        width: '100%', height: '100%', padding: '0.7rem 0.5rem', border: 'none', background: 'transparent',
+                        cursor: 'pointer', fontFamily: 'var(--font-cond)', letterSpacing: '0.02em',
+                        fontWeight: 800, fontSize: '0.9rem', color: accent,
+                        textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#c7d2ea',
+                      }}
+                    >
+                      {fmtPts(m.ventas)}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )

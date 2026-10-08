@@ -342,3 +342,57 @@ export function isCLideresParticipant(
 ): boolean {
   return role === 'lider'
 }
+
+// ── Top Vendedores / Product Champions (rankings mensuales, sin meta) ──────────
+// Dos vistas de la página de premiaciones que NO reparten premio: solo rankean.
+// Agrupan los pipelines del warehouse en los 4 productos que se venden.
+//
+// Solar aquí es SOLO residencial: las ventas comerciales no cuentan en estos
+// rankings (sí siguen contando en Ruleta y Plinko, que son premios con sus
+// propias reglas — ver PREMIO_PIPELINES / PLINKO_PIPELINES). Al quedar fuera de
+// PRODUCT_PIPELINES, 'commercial solar' queda excluido también del total de Top
+// Vendedores y del desglose de los dos modos.
+// Valores estáticos → interpolación segura en SQL.
+export type ProductKey = 'solar' | 'roofing' | 'pps' | 'water'
+
+export const PRODUCT_PIPELINES: Record<ProductKey, string[]> = {
+  solar:   ['residential solar'],
+  roofing: ['roofing'],
+  pps:     ['pps'],
+  water:   ['water products'],
+}
+
+export const PRODUCT_LABELS: Record<ProductKey, string> = {
+  solar:   'Solar residencial',
+  roofing: 'Roofing',
+  pps:     'Baterías Anker (PPS)',
+  water:   'Water',
+}
+
+// Peso de cada producto en el total de Top Vendedores: igual que Plinko —
+// Solar y Roofing 1 pto, Anker (PPS) y Water ½ pto. Product Champions NO usa
+// esta tabla: ahí se rankea por unidades vendidas de cada producto.
+export const PRODUCT_POINTS: Record<ProductKey, number> = {
+  solar:   1,
+  roofing: 1,
+  pps:     0.5,
+  water:   0.5,
+}
+
+export const PRODUCT_KEYS = Object.keys(PRODUCT_PIPELINES) as ProductKey[]
+
+// La unión de los 4 productos = universo del ranking de Top Vendedores.
+export const ALL_PRODUCT_PIPELINES = PRODUCT_KEYS.flatMap(k => PRODUCT_PIPELINES[k])
+
+export function isProductKey(k: string): k is ProductKey {
+  return (PRODUCT_KEYS as string[]).includes(k)
+}
+
+// Pipeline de dwh.dim_profiles → producto premiado (null si no es ninguno).
+export function productOf(pipeline: string | null | undefined): ProductKey | null {
+  const p = (pipeline ?? '').toLowerCase().trim()
+  return PRODUCT_KEYS.find(k => PRODUCT_PIPELINES[k].includes(p)) ?? null
+}
+
+// Cuántos puestos muestran los rankings de Top Vendedores y Product Champions.
+export const PREMIOS_TOP_N = 10
