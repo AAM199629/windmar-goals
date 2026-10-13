@@ -271,6 +271,10 @@ export const COMPTESLA_PARTICIPANT_IDS = new Set<string>([
   '4258103000003350227', // Rosalisse Torres → Rosalisse Torres (reactivada)
   '4258103000434527526', // Raiza Albino → Raiza Albino Mattei (Lider)
   '4258103000420825369', // Cynthia Rivera → Cinthia Rivera Pagan (Empleado - Lider; se llama 'Cinthia' con i en la BD)
+
+  // Añadida oct 2026 a petición (angel.alverio@windmarhome.com): calificaba por puntos
+  // (23 pts, #6 de Líderes al 2026-10-13) pero no estaba en la lista original.
+  '4258103000564586177', // Natalia Mercado Vega (Lider)
 ])
 
 // Gate de participación en la Competencia Tesla. Consultores: todos compiten.
