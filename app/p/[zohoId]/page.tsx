@@ -1,7 +1,9 @@
+import { Fragment } from 'react'
 import GoalCard from '@/components/GoalCard'
 import PromotorDashboardClient from '@/components/PromotorDashboardClient'
 import { getMetrics, getCruiseRankings, getCruiseRanks, getComptesaRankings, getGerenteAccionistaRankings, getCLideresRankings } from '@/lib/kv'
 import { query } from '@/lib/redshift'
+import { COMPTESLA_CORTE, COMPTESLA_CORTE_NOTE, comptesaCardVisible } from '@/lib/comptesla-corte'
 import { GRAD_POINTS, CRUISE_TOP_N, COMPTESLA_MIN_VENTAS, GERENTEA_PRIMARY, GERENTEA_DEV_TARGET, GERENTEA_SALES_TARGET, CLIDERES_MIN_POINTS, CLIDERES_TOP_N, CLIDERES_PRIZES, isPromotor } from '@/lib/config'
 
 // ── Rules text generators (server-side, role-aware) ───────────────────────────
@@ -136,6 +138,8 @@ completos y al día). Confírmalo con las
 asistentes de documentos.`
 }
 
+const COMPTESLA_TOP_SHOWN = 15  // filas del ranking Tesla en la tarjeta (ganan 10)
+
 function rankBadge(rank: number): string {
   if (rank === 1) return '🥇'
   if (rank === 2) return '🥈'
@@ -182,7 +186,12 @@ export default async function DashboardPage({
   const plinko     = metrics.plinko
   const ruleta     = metrics.ruleta
   const graduacion = metrics.graduacion
-  const competenciaTesla = metrics.competenciaTesla
+  // Competencia Tesla: con el corte congelado se lee la foto (no KV), y pasado
+  // COMPTESLA_CARD_UNTIL la tarjeta desaparece para todos.
+  const teslaFrozen = COMPTESLA_CORTE?.rows.find(r => r.zohoId === zohoId) ?? null
+  const competenciaTesla = !comptesaCardVisible() ? null
+    : COMPTESLA_CORTE ? teslaFrozen
+    : metrics.competenciaTesla
   const gerenteAccionista = metrics.gerenteAccionista
   const competenciaLideres = metrics.competenciaLideres
 
@@ -196,10 +205,15 @@ export default async function DashboardPage({
   const myCruiseRank     = cruiseRanks?.ranks?.[zohoId] ?? null
   const cruiseRosterSize = cruiseRanks?.rosterSize ?? 0
 
-  // Top 10 por rol para la Competencia Tesla (idéntico para todos los del mismo rol)
-  const myRole   = plinko?.role ?? 'trainee'
-  const rankings = competenciaTesla ? await getComptesaRankings() : null
-  const compTop  = rankings?.[myRole] ?? []
+  // Top 15 por rol para la Competencia Tesla (idéntico para todos los del mismo rol).
+  // Con el corte congelado sale de la foto, con el rol que tenía en el corte.
+  const myRole   = teslaFrozen?.role ?? plinko?.role ?? 'trainee'
+  const frozenRoleRows = COMPTESLA_CORTE?.rows.filter(r => r.role === myRole) ?? []
+  const rankings = competenciaTesla && !COMPTESLA_CORTE ? await getComptesaRankings() : null
+  const compTop: { zohoId: string; name: string; points: number; epc?: number }[] =
+    COMPTESLA_CORTE ? frozenRoleRows.slice(0, COMPTESLA_TOP_SHOWN) : rankings?.[myRole] ?? []
+  // Puesto propio si queda fuera del top mostrado (solo con la foto, que trae a todos).
+  const myTeslaRank = frozenRoleRows.findIndex(r => r.zohoId === zohoId) + 1
 
   // Ranking de gerentes para la tarjeta Gerente Accionista
   const gaRanking = gerenteAccionista ? (await getGerenteAccionistaRankings() ?? []) : []
@@ -482,7 +496,7 @@ export default async function DashboardPage({
                 letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--orange)',
                 marginBottom: '0.6rem',
               }}>
-                Top 10 — {myRole.charAt(0).toUpperCase() + myRole.slice(1)}
+                Top {COMPTESLA_CORTE ? COMPTESLA_TOP_SHOWN : 10} — {myRole.charAt(0).toUpperCase() + myRole.slice(1)}
               </div>
 
               {myRole === 'trainee' ? (
@@ -498,7 +512,15 @@ export default async function DashboardPage({
                   {compTop.map((r, i) => {
                     const isMe = r.zohoId === metrics.zohoId
                     return (
-                      <li key={r.zohoId} style={{
+                      <Fragment key={r.zohoId}>
+                      {i === 10 && (
+                        <li style={{
+                          textAlign: 'center', padding: '0.2rem 0', fontFamily: 'var(--font-cond)', fontWeight: 800,
+                          fontSize: '0.55rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                          color: '#aab4cc', borderTop: '1px dashed #d7deec', marginTop: '0.2rem',
+                        }}>corte top 10</li>
+                      )}
+                      <li style={{
                         display: 'flex', alignItems: 'center', gap: '0.6rem',
                         padding: '0.4rem 0.55rem', borderRadius: 7,
                         background: isMe ? 'rgba(245,166,35,0.14)' : i % 2 === 0 ? '#fafbff' : 'transparent',
@@ -518,10 +540,35 @@ export default async function DashboardPage({
                           flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700,
                           fontSize: '0.82rem', color: 'var(--orange)',
                         }}>{r.points.toFixed(1)} pts</span>
+                        {r.epc !== undefined && (
+                          <span style={{
+                            flexShrink: 0, width: '5.2rem', textAlign: 'right', fontFamily: 'var(--font-cond)',
+                            fontWeight: 600, fontSize: '0.75rem', color: 'var(--gray)',
+                          }}>{money(Math.round(r.epc))}</span>
+                        )}
                       </li>
+                      </Fragment>
                     )
                   })}
+                  {COMPTESLA_CORTE && teslaFrozen && myTeslaRank > COMPTESLA_TOP_SHOWN && (
+                    <li style={{
+                      display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.3rem',
+                      padding: '0.4rem 0.55rem', borderRadius: 7,
+                      background: 'rgba(245,166,35,0.14)', border: '1px solid rgba(245,166,35,0.45)',
+                    }}>
+                      <span style={{ width: '1.5rem', textAlign: 'center', flexShrink: 0, fontFamily: 'var(--font-bebas)', fontSize: '0.85rem', color: 'var(--gray)' }}>{myTeslaRank}</span>
+                      <span style={{ flex: 1, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem', color: 'var(--navy)' }}>{teslaFrozen.name} (tú)</span>
+                      <span style={{ flexShrink: 0, fontFamily: 'var(--font-cond)', fontWeight: 700, fontSize: '0.82rem', color: 'var(--orange)' }}>{teslaFrozen.points.toFixed(1)} pts</span>
+                      <span style={{ flexShrink: 0, width: '5.2rem', textAlign: 'right', fontFamily: 'var(--font-cond)', fontWeight: 600, fontSize: '0.75rem', color: 'var(--gray)' }}>{money(Math.round(teslaFrozen.epc))}</span>
+                    </li>
+                  )}
                 </ol>
+              )}
+              {COMPTESLA_CORTE && (
+                <p style={{ margin: '0.7rem 0 0', fontFamily: 'var(--font-cond)', fontSize: '0.62rem', color: 'var(--gray)', lineHeight: 1.4 }}>
+                  Empate en puntos → gana el mayor EPC (columna derecha).<br />
+                  {COMPTESLA_CORTE_NOTE}
+                </p>
               )}
             </div>
           </div>

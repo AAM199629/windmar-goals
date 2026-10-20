@@ -253,8 +253,15 @@ Los 0.5 pts van al mentor (`sponsor_id` del trainee).
 
 **Top 10 consultores + top 10 líderes + top 10 gerentes** = 30 ganadores.
 Se rankea **por puntos, de mayor a menor, dentro de cada rol**.
-⚠️ No hay criterio de desempate definido en el sistema; si hay empate en el corte, se
-resuelve manualmente.
+**Desempate (oct 2026):** a igualdad de puntos gana quien tenga **mayor EPC sumado** en sus
+ventas Tesla válidas del periodo. El EPC de Zoho no baja a Redshift, así que se usa
+`fact_deals.amount` como EPC (`compareComptesla` en `lib/config.ts`). Si también empatan en
+EPC, por nombre. Las asistidas no aportan EPC (son ventas del trainee).
+
+**Corte congelado:** el 20 oct 2026 se tomó la foto final del ranking
+(`lib/comptesla-corte.json`). El leaderboard y la tarjeta leen solo esa foto; el sync ya no
+los mueve. La tarjeta Tesla desaparece de todos los vendedores después del 31 oct 2026
+(`COMPTESLA_CARD_UNTIL`). Para otra edición: `COMPTESLA_CORTE = null`.
 
 ---
 

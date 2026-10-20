@@ -107,6 +107,7 @@ export interface CompetenciaTeslaMetrics {
   bateriaConSolar: number   // cantidad de baterías Tesla con solar (suma de battery_qty)
   bateriaSola:     number   // cantidad de baterías Tesla solas (suma de battery_qty)
   asistida:        number   // deals asistidos (1ª–4ª venta de un trainee) — por venta
+  epc:             number   // suma de fd.amount de sus ventas Tesla — desempate (ver compareComptesla)
   start:           string
   end:             string
 }
@@ -252,7 +253,7 @@ export function buildMetrics(params: {
   monthlyCount:       number
   weeklyPipelines:    PipelineCounts
   monthlyPipelines:   PipelineCounts
-  teslaCompCounts:    { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }
+  teslaCompCounts:    { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number; epc: number }
   // Competencia Líderes: ventas propias y ventas de trainee (1ª–4ª), ambas por
   // pipeline porque aquí la venta del trainee se pondera por producto, no plana.
   lideresCounts:        PipelineCounts
@@ -362,6 +363,7 @@ export function buildMetrics(params: {
           asistida:        teslaCompCounts.asistida,
           // Ventas hacia el mínimo /10: por deal Tesla, NO por cantidad de baterías.
           ventas:          teslaCompCounts.ventas,
+          epc:             teslaCompCounts.epc,
           points:
             teslaCompCounts.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
             teslaCompCounts.bateriaSola     * COMPTESLA_POINTS.bateriaSola +

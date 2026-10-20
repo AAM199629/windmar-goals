@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/redshift'
 import { setMetrics, setMembersList, setCruiseRankings, setCruiseRanks, setComptesaRankings, setGerenteAccionistaRankings, setCLideresRankings, type CruiseRankEntry, type ComptesaRankings, type GerenteAccionistaRankEntry, type CLideresRankEntry } from '@/lib/kv'
 import { buildMetrics, type RepMember, type PipelineCounts } from '@/lib/metrics'
-import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, CRUISE_TARGET, CRUISE_TOP_N, COMPTESLA_START, COMPTESLA_END, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
+import { TESLA_START, TESLA_END, CRUISE_START, CRUISE_END, CRUISE_TARGET, CRUISE_TOP_N, COMPTESLA_START, COMPTESLA_END, compareComptesla, CLIDERES_START, CLIDERES_END, CLIDERES_TOP_N, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, PROMOTOR_ROLES_SQL, promotorActiveSql } from '@/lib/config'
 import type { MemberEntry } from '@/lib/kv'
 
 function currentYYYYMM() {
@@ -255,12 +255,14 @@ async function runSync(month: string) {
     // Con solar (1 pt) = system_size_kw1 > 0 · Sola (0.5 pt) = system_size_kw1 en 0/null.
     // Los PUNTOS se cuentan por cantidad de baterías (× battery_qty); las VENTAS
     // (hacia el mínimo de 10) se cuentan por deal, sin importar cuántas baterías.
-    const teslaCompRows = await query<{ member_id: string; bateria_con_solar: string | number; bateria_sola: string | number; ventas: string | number }>(`
+    // EPC = suma de fd.amount de esas mismas ventas; solo sirve de desempate.
+    const teslaCompRows = await query<{ member_id: string; bateria_con_solar: string | number; bateria_sola: string | number; ventas: string | number; epc: string | number }>(`
       SELECT
         stm.member_id,
         SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_con_solar,
         SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_sola,
-        COUNT(*) AS ventas
+        COUNT(*) AS ventas,
+        SUM(COALESCE(fd.amount, 0)) AS epc
       FROM dwh.fact_deals fd
       JOIN dwh.dim_status_reason dsr
         ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
@@ -348,7 +350,7 @@ async function runSync(month: string) {
       GROUP BY stm_mentor.member_id, LOWER(dp.pipeline)
     `, [CLIDERES_START, CLIDERES_END])
 
-    const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }> = {}
+    const teslaCompMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number; epc: number }> = {}
     for (const r of teslaCompRows) {
       if (!r.member_id) continue
       teslaCompMap[r.member_id] = {
@@ -356,11 +358,12 @@ async function runSync(month: string) {
         bateriaSola:     Number(r.bateria_sola)      || 0,
         asistida:        0,
         ventas:          Number(r.ventas)            || 0,
+        epc:             Number(r.epc)               || 0,
       }
     }
     for (const r of teslaAsistidaRows) {
       if (!r.mentor_id) continue
-      const e = teslaCompMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 }
+      const e = teslaCompMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0, epc: 0 }
       e.asistida = Number(r.cnt) || 0
       teslaCompMap[r.mentor_id] = e
     }
@@ -398,7 +401,7 @@ async function runSync(month: string) {
     // ── 10. Build and persist metrics for each member ─────────────────────────
     const results: Array<{ zohoId: string; name: string; ok: boolean; error?: string }> = []
     const cruiseRank: CruiseRankEntry[] = []
-    const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number }> = []
+    const comptesla: Array<{ zohoId: string; name: string; role: string; points: number; ventas: number; epc: number }> = []
     const gerentea: GerenteAccionistaRankEntry[] = []
     const clideres: CLideresRankEntry[] = []
 
@@ -416,7 +419,7 @@ async function runSync(month: string) {
             monthlyCount:      monthlyMap[member.member_id]            ?? 0,
             weeklyPipelines:   weeklyPipelineMap[member.member_id]     ?? {},
             monthlyPipelines:  monthlyPipelineMap[member.member_id]    ?? {},
-            teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 },
+            teslaCompCounts:   teslaCompMap[member.member_id]          ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0, epc: 0 },
             lideresCounts:        lideresMap[member.member_id]         ?? {},
             lideresTraineeCounts: lideresTraineeMap[member.member_id]  ?? {},
             currentMonth:      month,
@@ -442,6 +445,7 @@ async function runSync(month: string) {
               role:   metrics.plinko.role,
               points: metrics.competenciaTesla.points,
               ventas: metrics.competenciaTesla.ventas,
+              epc:    metrics.competenciaTesla.epc,
             })
           }
           if (metrics.gerenteAccionista) {
@@ -493,9 +497,9 @@ async function runSync(month: string) {
     for (const role of ['consultor', 'lider', 'gerente']) {
       rankings[role] = comptesla
         .filter(c => c.role === role)
-        .sort((a, b) => b.points - a.points)
+        .sort(compareComptesla)
         .slice(0, 10)
-        .map(({ zohoId, name, points, ventas }) => ({ zohoId, name, points, ventas }))
+        .map(({ zohoId, name, points, ventas, epc }) => ({ zohoId, name, points, ventas, epc }))
     }
     await setComptesaRankings(rankings)
 

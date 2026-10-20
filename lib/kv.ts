@@ -73,7 +73,7 @@ export async function getCruiseRanks(): Promise<CruiseRanks | null> {
 }
 
 // ── Competencia Tesla: top 10 por rol ──────────────────────────────────────────
-export interface ComptesaRankEntry { zohoId: string; name: string; points: number; ventas: number }
+export interface ComptesaRankEntry { zohoId: string; name: string; points: number; ventas: number; epc?: number }
 export type ComptesaRankings = Record<string, ComptesaRankEntry[]>  // role → top 10
 
 export async function setComptesaRankings(r: ComptesaRankings): Promise<void> {

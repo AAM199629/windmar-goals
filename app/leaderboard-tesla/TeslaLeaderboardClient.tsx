@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import type { TeslaLeaderboardResponse, TeslaLeaderboardRow, TeslaRole } from '@/app/api/leaderboard-tesla/route'
+import CierreView from './CierreView'
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 
@@ -49,6 +50,9 @@ const ROLE_TABS: { role: TeslaRole; label: string }[] = [
   { role: 'gerente',   label: 'Gerentes' },
 ]
 
+// 'cierre' = vista de auditoría del corte final (top 15 de cada rol + EPC + holds).
+type View = TeslaRole | 'cierre'
+
 // ── Loading skeleton for the table ──────────────────────────────────────────────
 
 function TableSkeleton() {
@@ -79,7 +83,7 @@ export default function TeslaLeaderboardClient() {
   const [data, setData]           = useState<TeslaLeaderboardResponse | null>(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
-  const [activeRole, setActiveRole] = useState<TeslaRole>('consultor')
+  const [activeRole, setActiveRole] = useState<View>('consultor')
 
   useEffect(() => {
     fetch('/api/leaderboard-tesla')
@@ -282,7 +286,27 @@ export default function TeslaLeaderboardClient() {
             </button>
           )
         })}
+        <button
+          onClick={() => setActiveRole('cierre')}
+          style={{
+            fontFamily: 'var(--font-cond)', fontWeight: 800,
+            fontSize: '0.8rem', letterSpacing: '0.08em', textTransform: 'uppercase',
+            padding: '0.55rem 1.25rem', borderRadius: 999, cursor: 'pointer',
+            border: activeRole === 'cierre' ? '1px solid #E82127' : '1px solid #f5b5b7',
+            background: activeRole === 'cierre' ? '#E82127' : '#fff',
+            color: activeRole === 'cierre' ? '#fff' : '#E82127',
+            transition: 'all 0.15s',
+          }}
+        >
+          Cierre · Top 15 + EPC
+        </button>
       </div>
+
+      {activeRole === 'cierre' ? (
+        loading ? <div className="section-eyebrow" style={{ background: 'var(--light)' }}>Cargando…</div>
+        : error ? <div style={{ textAlign: 'center', padding: '3rem', color: '#dc2626', fontFamily: 'var(--font-cond)' }}>Error al cargar datos: {error}</div>
+        : <CierreView rows={rows} minVentas={minVentas} note={data?.note} />
+      ) : (<>
 
       {/* ═══════════════════════════════════════════════════════
           LEADERBOARD TABLE
@@ -430,11 +454,12 @@ export default function TeslaLeaderboardClient() {
           ))}
         </div>
       </div>
+      </>)}
 
       {/* Footer: last updated */}
       {data?.computedAt && (
         <footer className="dashboard-footer">
-          Datos de Redshift · Actualizado: {new Date(data.computedAt).toLocaleString('es-PR', { timeZone: 'America/Puerto_Rico' })}
+          {data.note ?? `Datos de Redshift · Actualizado: ${new Date(data.computedAt).toLocaleString('es-PR', { timeZone: 'America/Puerto_Rico' })}`}
         </footer>
       )}
     </main>
