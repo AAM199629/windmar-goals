@@ -3,8 +3,9 @@ import { unstable_cache } from 'next/cache'
 import { query } from '@/lib/redshift'
 import {
   COMPTESLA_START, COMPTESLA_END, COMPTESLA_POINTS, COMPTESLA_MIN_VENTAS,
-  normalizeRole, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, isComptesaParticipant,
+  compareComptesla, normalizeRole, ACTIVE_DEAL_SQL, ALLOWED_ROLES_SQL, isComptesaParticipant,
 } from '@/lib/config'
+import { COMPTESLA_CORTE, COMPTESLA_CORTE_NOTE } from '@/lib/comptesla-corte'
 
 export type TeslaRole = 'consultor' | 'lider' | 'gerente'
 
@@ -17,6 +18,7 @@ export interface TeslaLeaderboardRow {
   bateriaConSolar: number
   bateriaSola:     number
   asistida:        number
+  epc:             number
 }
 
 export interface TeslaLeaderboardResponse {
@@ -25,6 +27,7 @@ export interface TeslaLeaderboardResponse {
   end:        string
   minVentas:  number
   computedAt: string
+  note?:      string   // nota del corte congelado, si aplica
 }
 
 interface MemberRow {
@@ -38,6 +41,7 @@ interface TeslaCompRow {
   bateria_con_solar: string | number
   bateria_sola:      string | number
   ventas:            string | number
+  epc:               string | number
 }
 
 interface AsistidaRow {
@@ -69,7 +73,8 @@ const fetchTeslaLeaderboard = unstable_cache(
           stm.member_id,
           SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) > 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_con_solar,
           SUM(CASE WHEN COALESCE(fd.system_size_kw1, 0) = 0 THEN COALESCE(fd.battery_qty, 0) ELSE 0 END) AS bateria_sola,
-          COUNT(*) AS ventas
+          COUNT(*) AS ventas,
+          SUM(COALESCE(fd.amount, 0)) AS epc
         FROM dwh.fact_deals fd
         JOIN dwh.dim_status_reason dsr
           ON dsr.id_status_reason = fd.id_status_reason AND dsr.is_current = true
@@ -113,7 +118,7 @@ const fetchTeslaLeaderboard = unstable_cache(
     ])
 
     // ── Build lookup maps ──────────────────────────────────────────────────────
-    const compMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number }> = {}
+    const compMap: Record<string, { bateriaConSolar: number; bateriaSola: number; asistida: number; ventas: number; epc: number }> = {}
     for (const r of teslaCompRows) {
       if (!r.member_id) continue
       compMap[r.member_id] = {
@@ -121,11 +126,12 @@ const fetchTeslaLeaderboard = unstable_cache(
         bateriaSola:     Number(r.bateria_sola)      || 0,
         asistida:        0,
         ventas:          Number(r.ventas)            || 0,
+        epc:             Number(r.epc)               || 0,
       }
     }
     for (const r of teslaAsistidaRows) {
       if (!r.mentor_id) continue
-      const e = compMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 }
+      const e = compMap[r.mentor_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0, epc: 0 }
       e.asistida = Number(r.cnt) || 0
       compMap[r.mentor_id] = e
     }
@@ -138,7 +144,7 @@ const fetchTeslaLeaderboard = unstable_cache(
       // Solo participan líderes/gerentes del allow-list; consultores: todos.
       if (!isComptesaParticipant(m.member_id, role)) continue
 
-      const c = compMap[m.member_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0 }
+      const c = compMap[m.member_id] ?? { bateriaConSolar: 0, bateriaSola: 0, asistida: 0, ventas: 0, epc: 0 }
       const points =
         c.bateriaConSolar * COMPTESLA_POINTS.bateriaConSolar +
         c.bateriaSola     * COMPTESLA_POINTS.bateriaSola +
@@ -155,10 +161,11 @@ const fetchTeslaLeaderboard = unstable_cache(
         bateriaConSolar: c.bateriaConSolar,
         bateriaSola:     c.bateriaSola,
         asistida:        c.asistida,
+        epc:             c.epc,
       })
     }
 
-    rows.sort((a, b) => b.points - a.points)
+    rows.sort(compareComptesla)
 
     return {
       rows,
@@ -173,6 +180,10 @@ const fetchTeslaLeaderboard = unstable_cache(
 )
 
 export async function GET() {
+  // Competencia cerrada: se sirve la foto congelada del corte, no Redshift.
+  if (COMPTESLA_CORTE) {
+    return NextResponse.json({ ...COMPTESLA_CORTE, computedAt: COMPTESLA_CORTE.takenAt, note: COMPTESLA_CORTE_NOTE })
+  }
   try {
     const data = await fetchTeslaLeaderboard()
     return NextResponse.json(data)

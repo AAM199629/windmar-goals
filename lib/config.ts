@@ -185,6 +185,17 @@ export const COMPTESLA_POINTS = {
 }
 export const COMPTESLA_MIN_VENTAS = 10  // requisito mínimo para clasificar
 
+// Desempate (oct 2026, regla del negocio): a igualdad de puntos gana quien tenga
+// mayor EPC sumado en sus ventas Tesla válidas. El EPC de Zoho NO baja a Redshift,
+// así que se usa `fact_deals.amount` como EPC. Último recurso: nombre, para que el
+// orden sea estable entre syncs (antes un empate en el corte salía al azar).
+export function compareComptesla(
+  a: { points: number; epc?: number; name: string },
+  b: { points: number; epc?: number; name: string },
+): number {
+  return b.points - a.points || (b.epc ?? 0) - (a.epc ?? 0) || a.name.localeCompare(b.name)
+}
+
 // ── Participantes de la Competencia Tesla (líderes y gerentes) ─────────────────
 // Solo un subconjunto específico de líderes/gerentes participa en el viaje de
 // Tesla. Los consultores NO se filtran (todos compiten); los trainees nunca
