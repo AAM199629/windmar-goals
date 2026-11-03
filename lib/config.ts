@@ -26,7 +26,7 @@ export const CRUISE_END   = '2026-12-31'
 // /p/[zohoId]. A diferencia de la Competencia Tesla (top 10 POR ROL) aquí es un
 // solo ranking para todos los vendedores activos: la meta de 70 pts es la misma
 // para todo el mundo, así que dividir por rol no aplica.
-export const CRUISE_TOP_N = 15
+export const CRUISE_TOP_N = 50
 
 // Deals excluidos de TODA métrica de competencia: cancelados + en hold.
 // on_hold_status vive en dwh.dim_status_reason (alias `dsr` en todas las queries);

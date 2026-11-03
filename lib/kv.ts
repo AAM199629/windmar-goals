@@ -35,7 +35,7 @@ export async function getMembersList(): Promise<MemberEntry[]> {
   return (await redis.get<MemberEntry[]>(`${PREFIX}:members`)) ?? []
 }
 
-// ── Crucero: top 15 general ────────────────────────────────────────────────────
+// ── Crucero: top 50 general ────────────────────────────────────────────────────
 // Un solo ranking para todos los vendedores activos (sin dividir por rol): la
 // meta de 70 pts es igual para todos. `qualified` = ya llegó a la meta.
 export interface CruiseRankEntry {

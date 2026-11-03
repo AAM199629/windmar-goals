@@ -195,7 +195,7 @@ export default async function DashboardPage({
   const gerenteAccionista = metrics.gerenteAccionista
   const competenciaLideres = metrics.competenciaLideres
 
-  // Top 15 del crucero: un solo ranking para todos (la tarjeta la ve todo vendedor,
+  // Top 50 del crucero: un solo ranking para todos (la tarjeta la ve todo vendedor,
   // así que no va condicionado a ninguna competencia).
   const cruiseRanking = (await getCruiseRankings()) ?? []
 
@@ -387,7 +387,7 @@ export default async function DashboardPage({
             )}
           </dl>
 
-          {/* Top 15 — un solo ranking para todos los vendedores (no va por rol) */}
+          {/* Top 50 — un solo ranking para todos los vendedores (no va por rol) */}
           <div style={{ marginTop: '1rem', borderTop: '1px solid #edf0f8', paddingTop: '0.85rem' }}>
             <div style={{
               fontFamily: 'var(--font-cond)', fontWeight: 800, fontSize: '0.62rem',
@@ -402,6 +402,10 @@ export default async function DashboardPage({
                 Ranking disponible tras el próximo sync.
               </p>
             ) : (
+              <>
+              {/* Caja del alto de ~10 filas con scroll interno: el top 50 completo
+                  no cabe sin estirar la tarjeta, así que el resto se baja dentro. */}
+              <div style={{ maxHeight: '22rem', overflowY: 'auto', overscrollBehavior: 'contain' }}>
               <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {cruiseRanking.map((r, i) => {
                   const isMe = r.zohoId === metrics.zohoId
@@ -422,7 +426,7 @@ export default async function DashboardPage({
                         fontSize: '0.82rem', color: 'var(--navy)', textDecoration: 'none',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>{r.name}{isMe && ' (tú)'}</a>
-                      {/* Estar en el top 15 no es lo mismo que ir al crucero: se va
+                      {/* Estar en el top 50 no es lo mismo que ir al crucero: se va
                           llegando a los 70 pts, así que se marca quién ya clasificó. */}
                       {r.qualified && (
                         <span title={`Ya llegó a ${cruise.target} pts`} style={{
@@ -437,11 +441,13 @@ export default async function DashboardPage({
                     </li>
                   )
                 })}
+              </ol>
+              </div>
 
-                {/* Fuera del top 15: se engancha tu propia fila al final con tu
-                    puesto real, para no dejarte sin referencia en la lista. */}
-                {myCruiseRank !== null && myCruiseRank > CRUISE_TOP_N && (
-                  <>
+              {/* Fuera del top 50: tu propia fila queda fija debajo de la caja (fuera
+                  del scroll) con tu puesto real, para no dejarte sin referencia. */}
+              {myCruiseRank !== null && myCruiseRank > CRUISE_TOP_N && (
+                <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <li aria-hidden style={{
                       textAlign: 'center', color: '#c3cad8', fontSize: '0.7rem',
                       lineHeight: 1, padding: '0.15rem 0',
@@ -472,9 +478,9 @@ export default async function DashboardPage({
                         fontSize: '0.82rem', color: 'var(--orange)',
                       }}>{(cruise.total ?? 0).toFixed(1)} pts</span>
                     </li>
-                  </>
-                )}
-              </ol>
+                </ol>
+              )}
+              </>
             )}
           </div>
         </div>

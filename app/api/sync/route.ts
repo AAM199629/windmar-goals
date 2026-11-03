@@ -479,7 +479,7 @@ async function runSync(month: string) {
       }),
     )
 
-    // ── 10a. Crucero: top 15 general (todos los roles en una sola tabla) ──────
+    // ── 10a. Crucero: top 50 general (todos los roles en una sola tabla) ──────
     // Desempate por puntos personales y luego por nombre, para que el orden no
     // baile entre syncs cuando dos vendedores están empatados en total.
     cruiseRank.sort((a, b) =>
